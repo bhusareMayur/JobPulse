@@ -51,7 +51,7 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
       const { data: { session } } = await supabase.auth.getSession();
       
       // Call your custom Express backend instead of Supabase Edge Functions
-      const response = await fetch('http://localhost:3000/api/trade', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trade`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
