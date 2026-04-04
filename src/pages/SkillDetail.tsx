@@ -43,44 +43,40 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
   };
 
   const handleTrade = async () => {
-    if (!skill || !profile) return;
-
+    setLoading(true);
     setError('');
     setSuccess('');
-    setLoading(true);
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/execute-trade`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          },
-          body: JSON.stringify({
-            skillId: skill.id,
-            type: tradeType,
-            quantity: quantity,
-          }),
-        }
-      );
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Call your custom Express backend instead of Supabase Edge Functions
+      const response = await fetch('http://localhost:3000/api/execute-trade', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ 
+          skillId, 
+          type: tradeType, 
+          quantity 
+        })
+      });
 
-      const data = await response.json();
+      const result = await response.json();
 
-      if (response.ok) {
-        setSuccess(data.message);
-        await refreshProfile();
-        await fetchSkillData();
-        setQuantity(1);
-      } else {
-        setError(data.error || 'Trade failed');
+      if (!response.ok || result.error) {
+        throw new Error(result.error || 'Failed to execute trade');
       }
-    } catch (err) {
-      setError('Failed to execute trade');
-    }
 
-    setLoading(false);
+      setSuccess(`Successfully ${tradeType === 'buy' ? 'bought' : 'sold'} ${quantity} units!`);
+      await refreshProfile(); // Update balance in UI
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!skill) {
