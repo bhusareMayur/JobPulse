@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRight, Plus } from 'lucide-react';
 import { supabase, Skill } from '../lib/supabase';
+import { AddSkillForm } from '../components/AddSkillForm';
 
 interface DashboardProps {
   onNavigateToSkill: (skillId: string) => void;
@@ -9,6 +10,7 @@ interface DashboardProps {
 export const Dashboard = ({ onNavigateToSkill }: DashboardProps) => {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   useEffect(() => {
     fetchSkills();
@@ -51,9 +53,19 @@ export const Dashboard = ({ onNavigateToSkill }: DashboardProps) => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Skills Market</h1>
-        <p className="text-gray-600">Trade skills based on real-time demand</p>
+      <div className="flex justify-between items-end mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">JobPulse</h1>
+          <p className="text-gray-600">Trade skills based on real-time demand</p>
+        </div>
+        
+        <button 
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          <span>Add Skill</span>
+        </button>
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -61,6 +73,13 @@ export const Dashboard = ({ onNavigateToSkill }: DashboardProps) => {
           <strong>How it works:</strong> Buy skills you think will be in demand. As more people buy, prices rise. Sell when you've made a profit!
         </p>
       </div>
+
+      {showAddForm && (
+        <AddSkillForm 
+          onSuccess={() => setShowAddForm(false)} 
+          onCancel={() => setShowAddForm(false)} 
+        />
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {skills.map((skill) => {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Wallet as WalletIcon, TrendingUp, TrendingDown, History } from 'lucide-react';
+import { Wallet as WalletIcon, TrendingUp, TrendingDown, History, ChevronDown } from 'lucide-react';
 import { supabase, Holding, Trade } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -8,17 +8,20 @@ interface HoldingWithSkill extends Holding {
   current_price: number;
 }
 
-// Added interface for Wallet props
 interface WalletProps {
   onNavigateToSkill: (skillId: string) => void;
 }
 
-// Accept the onNavigateToSkill prop
 export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
   const { profile, user } = useAuth();
   const [holdings, setHoldings] = useState<HoldingWithSkill[]>([]);
   const [trades, setTrades] = useState<(Trade & { skill_name: string })[]>([]);
+  const [rewards, setRewards] = useState<any[]>([]); // New state for referral rewards
   const [loading, setLoading] = useState(true);
+  
+  const [tradeLimit, setTradeLimit] = useState(10);
+  const [hasMoreTrades, setHasMoreTrades] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -29,7 +32,8 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
   const fetchWalletData = async () => {
     if (!user) return;
 
-    const [holdingsRes, tradesRes] = await Promise.all([
+    // Fetch holdings, trades, and referral rewards simultaneously
+    const [holdingsRes, tradesRes, rewardsRes] = await Promise.all([
       supabase
         .from('holdings')
         .select('*, skills(name, current_price)')
@@ -39,7 +43,12 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
         .select('*, skills(name)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(20),
+        .limit(10),
+      supabase
+        .from('referral_rewards')
+        .select('*')
+        .or(`referrer_id.eq.${user.id},referee_id.eq.${user.id}`)
+        .order('paid_at', { ascending: false })
     ]);
 
     if (holdingsRes.data) {
@@ -57,9 +66,70 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
         skill_name: t.skills.name,
       }));
       setTrades(tradesWithSkill);
+      setHasMoreTrades(tradesRes.data.length === 10);
+    }
+
+    if (rewardsRes.data) {
+      setRewards(rewardsRes.data);
     }
 
     setLoading(false);
+  };
+
+  const loadMoreTrades = async () => {
+    if (!user) return;
+    setLoadingMore(true);
+    
+    const newLimit = tradeLimit + 10;
+    
+    const { data, error } = await supabase
+      .from('trades')
+      .select('*, skills(name)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(newLimit);
+
+    if (!error && data) {
+      const tradesWithSkill = data.map((t: any) => ({
+        ...t,
+        skill_name: t.skills.name,
+      }));
+      setTrades(tradesWithSkill);
+      setTradeLimit(newLimit);
+      setHasMoreTrades(data.length === newLimit);
+    }
+    
+    setLoadingMore(false);
+  };
+
+  // Combine trades and rewards into a single timeline array
+  const getUnifiedTransactions = () => {
+    const formattedTrades = trades.map(t => ({
+      id: t.id,
+      type: t.type,
+      title: t.skill_name,
+      amount: t.total_value,
+      date: t.created_at,
+      details: `${t.quantity} × ${t.price.toFixed(2)} JC`,
+      skill_id: t.skill_id
+    }));
+
+    const formattedRewards = rewards.map(r => {
+      const isReferrer = r.referrer_id === user?.id;
+      return {
+        id: r.id,
+        type: 'referral',
+        title: isReferrer ? 'Referral Reward' : 'Welcome Bonus',
+        amount: isReferrer ? r.referrer_amount : r.referee_amount,
+        date: r.paid_at,
+        details: isReferrer ? 'You referred a new trader' : 'Referred by a friend',
+        skill_id: null
+      };
+    });
+
+    return [...formattedTrades, ...formattedRewards]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, tradeLimit); // Apply pagination to the combined list
   };
 
   const calculatePortfolioValue = () => {
@@ -93,6 +163,7 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
   const totalWealth = calculateTotalWealth();
   const overallPL = calculateOverallPL();
   const overallPLPercent = (overallPL / 10000) * 100;
+  const transactions = getUnifiedTransactions();
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -199,48 +270,72 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center space-x-2 mb-4">
             <History className="w-5 h-5 text-gray-600" />
-            <h2 className="text-xl font-bold text-gray-900">Recent Trades</h2>
+            <h2 className="text-xl font-bold text-gray-900">Transaction History</h2>
           </div>
-          {trades.length > 0 ? (
+          {transactions.length > 0 ? (
             <div className="space-y-2">
-              {trades.map((trade) => (
+              {transactions.map((tx) => (
                 <div 
-                  key={trade.id} 
-                  onClick={() => onNavigateToSkill(trade.skill_id)}
-                  className="border border-gray-200 rounded-lg p-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                  key={tx.id} 
+                  onClick={() => tx.skill_id && onNavigateToSkill(tx.skill_id)}
+                  className={`border border-gray-200 rounded-lg p-3 transition-colors ${
+                    tx.skill_id 
+                      ? 'cursor-pointer hover:border-blue-400 hover:bg-blue-50' 
+                      : 'bg-yellow-50/50'
+                  }`}
                 >
                   <div className="flex justify-between items-start mb-1">
                     <div>
-                      <p className="font-medium text-gray-900">{trade.skill_name}</p>
+                      <p className="font-medium text-gray-900">{tx.title}</p>
                       <p className="text-xs text-gray-500">
-                        {new Date(trade.created_at).toLocaleString()}
+                        {new Date(tx.date).toLocaleString()}
                       </p>
                     </div>
                     <span
                       className={`px-2 py-1 rounded text-xs font-medium ${
-                        trade.type === 'buy'
+                        tx.type === 'buy'
                           ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
+                          : tx.type === 'sell'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-yellow-100 text-yellow-700'
                       }`}
                     >
-                      {trade.type.toUpperCase()}
+                      {tx.type === 'referral' ? 'BONUS' : tx.type.toUpperCase()}
                     </span>
                   </div>
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-sm items-center">
                     <span className="text-gray-600">
-                      {trade.quantity} × {trade.price.toFixed(2)} JC
+                      {tx.details}
                     </span>
-                    <span className="font-bold text-gray-900">
-                      {trade.total_value.toFixed(2)} JC
+                    <span className={`font-bold ${tx.type === 'buy' ? 'text-gray-900' : 'text-green-600'}`}>
+                      {tx.type === 'buy' ? '-' : '+'}{tx.amount.toFixed(2)} JC
                     </span>
                   </div>
                 </div>
               ))}
+              
+              {/* Load More Button */}
+              {hasMoreTrades && (
+                <button
+                  onClick={loadMoreTrades}
+                  disabled={loadingMore}
+                  className="w-full mt-4 py-3 bg-gray-50 hover:bg-blue-50 text-blue-600 font-medium rounded-lg border border-transparent hover:border-blue-200 transition-colors flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {loadingMore ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  ) : (
+                    <>
+                      <span>Load More History</span>
+                      <ChevronDown className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           ) : (
             <div className="text-center py-12 text-gray-500">
-              <p>No trades yet</p>
-              <p className="text-sm">Your trade history will appear here</p>
+              <p>No transactions yet</p>
+              <p className="text-sm">Your activity will appear here</p>
             </div>
           )}
         </div>

@@ -67,7 +67,7 @@ export const Signup = ({ onToggle }: SignupProps) => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Join SkillMarket</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Join JobPulse</h1>
           <p className="text-gray-600">Start with 10,000 JobCoins</p>
         </div>
 

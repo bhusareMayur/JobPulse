@@ -36,7 +36,12 @@ app.post('/api/trade', authenticateUser, async (req, res) => {
     const { data: skill, error: skillError } = await supabase.from('skills').select('*').eq('id', skillId).single();
     if (skillError) throw new Error('Skill not found');
 
-    const { data: profile, error: profileError } = await supabase.from('profiles').select('balance').eq('id', userId).single();
+    // FIX: Select referred_by and referral_rewarded to check for referral eligibility
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('balance, referred_by, referral_rewarded')
+      .eq('id', userId)
+      .single();
     if (profileError) throw new Error('Profile not found');
 
     const { data: holding } = await supabase.from('holdings')
@@ -104,11 +109,49 @@ app.post('/api/trade', authenticateUser, async (req, res) => {
       throw new Error('Invalid trade type');
     }
 
+    // --- FIX: REFERRAL REWARD LOGIC ---
+    let referralProcessed = false;
+    
+    if (profile.referred_by && !profile.referral_rewarded) {
+      // Find the user who referred this person
+      const { data: referrer } = await supabase
+        .from('profiles')
+        .select('id, balance')
+        .eq('referral_code', profile.referred_by)
+        .single();
+
+      if (referrer) {
+        // Give 500 JC to the new user making their first trade
+        newBalance += 500;
+        
+        // Give 1000 JC to the person who referred them
+        await supabase
+          .from('profiles')
+          .update({ balance: Number(referrer.balance) + 1000 })
+          .eq('id', referrer.id);
+
+        // Keep a record of the reward
+        await supabase.from('referral_rewards').insert({
+          referrer_id: referrer.id,
+          referee_id: userId,
+          referrer_amount: 1000,
+          referee_amount: 500
+        });
+
+        referralProcessed = true;
+      }
+    }
+    // ----------------------------------
+
     // 2. Perform Global Database Updates
     const finalPrice = Math.max(0.1, newPrice); // Price cannot drop below 0.1 JC
 
     // Update Profile Balance
-    await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
+    const profileUpdatePayload = { balance: newBalance };
+    if (referralProcessed) {
+      profileUpdatePayload.referral_rewarded = true;
+    }
+    await supabase.from('profiles').update(profileUpdatePayload).eq('id', userId);
     
     // Update Skill Market Price
     await supabase.from('skills').update({ current_price: finalPrice }).eq('id', skillId);
@@ -129,7 +172,7 @@ app.post('/api/trade', authenticateUser, async (req, res) => {
       price: finalPrice
     });
 
-    res.json({ success: true, balance: newBalance });
+    res.json({ success: true, balance: newBalance, referralBonusApplied: referralProcessed });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -199,6 +242,64 @@ app.get('/api/leaderboard', async (req, res) => {
     leaderboard.sort((a, b) => b.totalWealth - a.totalWealth);
 
     res.json({ leaderboard });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// Route: Add a New Skill
+app.post('/api/skills', authenticateUser, async (req, res) => {
+  const { name, initialPrice } = req.body;
+
+  try {
+    // 1. Basic Validation
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'Skill name is required' });
+    }
+    
+    const minPrice = 1.0; // Define your absolute minimum price floor here
+    const price = Number(initialPrice);
+    if (isNaN(price) || price < minPrice) {
+      return res.status(400).json({ error: `Initial price must be at least ${minPrice} JC` });
+    }
+
+    const cleanName = name.trim();
+
+    // 2. Check for Duplicates (Case-Insensitive)
+    // using ilike allows us to catch "React" if "react" already exists
+    const { data: existingSkill } = await supabase
+      .from('skills')
+      .select('id')
+      .ilike('name', cleanName)
+      .maybeSingle();
+
+    if (existingSkill) {
+      return res.status(400).json({ error: 'This skill already exists in the market' });
+    }
+
+    // 3. Insert the new skill
+    const { data: newSkill, error: insertError } = await supabase
+      .from('skills')
+      .insert({
+        name: cleanName,
+        current_price: price,
+        initial_price: price,
+        total_buy_volume: 0,
+        total_sell_volume: 0
+      })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+
+    // 4. Initialize Price History (Crucial for the SkillDetail graph)
+    await supabase.from('price_history').insert({
+      skill_id: newSkill.id,
+      price: price
+    });
+
+    res.json({ success: true, skill: newSkill });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
