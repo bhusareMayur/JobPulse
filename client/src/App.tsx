@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './components/Auth/Login';
 import { Signup } from './components/Auth/Signup';
@@ -9,13 +10,22 @@ import { Wallet } from './pages/Wallet';
 import { Leaderboard } from './pages/Leaderboard';
 import { Profile } from './pages/Profile';
 
-type Page = 'dashboard' | 'wallet' | 'leaderboard' | 'profile';
+// 1. Helper component to bridge the URL parameters to your existing SkillDetail component
+function SkillDetailRoute() {
+  const { skillId } = useParams<{ skillId: string }>();
+  const navigate = useNavigate();
 
-function AppContent() {
+  if (!skillId) return <div>Skill not found</div>;
+
+  // navigate(-1) tells the browser to go back one step in history!
+  return <SkillDetail skillId={skillId} onBack={() => navigate(-1)} />;
+}
+
+// 2. The main routing component
+function AppRoutes() {
   const { user, loading } = useAuth();
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
-  const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   if (loading) {
     return (
@@ -33,44 +43,37 @@ function AppContent() {
     );
   }
 
+  // Use React Router's navigate function instead of updating state
   const handleNavigateToSkill = (skillId: string) => {
-    setSelectedSkillId(skillId);
-  };
-
-  const handleBackToDashboard = () => {
-    setSelectedSkillId(null);
-    setCurrentPage('dashboard');
+    navigate(`/skill/${skillId}`);
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar currentPage={currentPage} onNavigate={(page) => {
-        setCurrentPage(page as Page);
-        setSelectedSkillId(null);
-      }} />
+      {/* Navbar no longer needs props, it handles its own active states via React Router */}
+      <Navbar />
 
       <main>
-        {selectedSkillId ? (
-          <SkillDetail skillId={selectedSkillId} onBack={handleBackToDashboard} />
-        ) : (
-          <>
-            {currentPage === 'dashboard' && <Dashboard onNavigateToSkill={handleNavigateToSkill} />}
-            {/* Added onNavigateToSkill prop here */}
-            {currentPage === 'wallet' && <Wallet onNavigateToSkill={handleNavigateToSkill} />}
-            {currentPage === 'leaderboard' && <Leaderboard />}
-            {currentPage === 'profile' && <Profile />}
-          </>
-        )}
+        <Routes>
+          <Route path="/" element={<Dashboard onNavigateToSkill={handleNavigateToSkill} />} />
+          <Route path="/wallet" element={<Wallet onNavigateToSkill={handleNavigateToSkill} />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/skill/:skillId" element={<SkillDetailRoute />} />
+        </Routes>
       </main>
     </div>
   );
 }
 
+// 3. Wrap everything in BrowserRouter
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

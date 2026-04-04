@@ -125,31 +125,41 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Price History</h2>
             <div className="h-64 relative">
-              {priceHistory.length > 0 ? (
+              {priceHistory.length > 1 ? (
                 <svg className="w-full h-full" viewBox="0 0 800 200" preserveAspectRatio="none">
-                  <polyline
-                    fill="none"
-                    stroke="#2563eb"
-                    strokeWidth="2"
-                    points={priceHistory.map((p, i) => {
-                      const x = (i / (priceHistory.length - 1)) * 800;
-                      const y = 200 - ((p.price - minPrice) / priceRange) * 180;
-                      return `${x},${y}`;
-                    }).join(' ')}
-                  />
-                  <polyline
-                    fill="rgba(37, 99, 235, 0.1)"
-                    stroke="none"
-                    points={`0,200 ${priceHistory.map((p, i) => {
-                      const x = (i / (priceHistory.length - 1)) * 800;
-                      const y = 200 - ((p.price - minPrice) / priceRange) * 180;
-                      return `${x},${y}`;
-                    }).join(' ')} 800,200`}
-                  />
+                  {priceHistory.map((p, i) => {
+                    if (i === 0) return null; 
+                    
+                    const prev = priceHistory[i - 1];
+                    
+                    const x1 = ((i - 1) / (priceHistory.length - 1)) * 800;
+                    const y1 = 200 - ((prev.price - minPrice) / priceRange) * 180;
+                    
+                    const x2 = (i / (priceHistory.length - 1)) * 800;
+                    const y2 = 200 - ((p.price - minPrice) / priceRange) * 180;
+
+                    const isUp = p.price >= prev.price;
+                    const strokeColor = isUp ? '#22c55e' : '#ef4444'; 
+
+                    return (
+                      <line
+                        key={p.id || i}
+                        x1={x1}
+                        y1={y1}
+                        x2={x2}
+                        y2={y2}
+                        stroke={strokeColor}
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                      />
+                    );
+                  })}
                 </svg>
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-400">
-                  No price history available
+                  {priceHistory.length === 1 
+                    ? 'Not enough price history to draw a trend' 
+                    : 'No price history available'}
                 </div>
               )}
             </div>
