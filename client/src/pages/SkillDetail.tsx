@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase, Skill, PriceHistory } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+
+type Timeframe = '1H' | '1D' | '1W' | 'ALL';
 
 interface SkillDetailProps {
   skillId: string;
@@ -11,6 +14,8 @@ interface SkillDetailProps {
 export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
   const [skill, setSkill] = useState<Skill | null>(null);
   const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
+  const [timeframe, setTimeframe] = useState<Timeframe>('ALL');
+  
   const [quantity, setQuantity] = useState(1);
   const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy');
   const [loading, setLoading] = useState(false);
@@ -20,22 +25,55 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
 
   useEffect(() => {
     fetchSkillData();
-    const channel = supabase
+    
+    const skillChannel = supabase
       .channel(`skill-${skillId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'skills', filter: `id=eq.${skillId}` }, () => {
-        fetchSkillData();
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'skills', filter: `id=eq.${skillId}` }, (payload) => {
+        setSkill(payload.new as Skill);
+      })
+      .subscribe();
+
+    const historyChannel = supabase
+      .channel(`history-${skillId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'price_history', filter: `skill_id=eq.${skillId}` }, (payload) => {
+        setPriceHistory(prev => {
+          const newHistory = [...prev, payload.new as PriceHistory];
+          // Keep up to 500 points to prevent lag, but don't truncate early on large timeframes
+          return newHistory.length > 500 ? newHistory.slice(-500) : newHistory; 
+        });
       })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(skillChannel);
+      supabase.removeChannel(historyChannel);
     };
-  }, [skillId]);
+  }, [skillId, timeframe]); // Re-fetch when timeframe changes
 
   const fetchSkillData = async () => {
+    let historyQuery = supabase
+      .from('price_history')
+      .select('*')
+      .eq('skill_id', skillId)
+      .order('created_at', { ascending: true });
+
+    // Apply Timeframe Filters dynamically using JS Dates
+    if (timeframe !== 'ALL') {
+      const now = new Date();
+      let pastDate = new Date();
+      if (timeframe === '1H') pastDate.setHours(now.getHours() - 1);
+      if (timeframe === '1D') pastDate.setDate(now.getDate() - 1);
+      if (timeframe === '1W') pastDate.setDate(now.getDate() - 7);
+      
+      historyQuery = historyQuery.gte('created_at', pastDate.toISOString());
+    } else {
+      // For ALL, limit to prevent massive payload issues as the db grows
+      historyQuery = historyQuery.limit(500); 
+    }
+
     const [skillRes, historyRes] = await Promise.all([
       supabase.from('skills').select('*').eq('id', skillId).single(),
-      supabase.from('price_history').select('*').eq('skill_id', skillId).order('created_at', { ascending: true }).limit(50),
+      historyQuery,
     ]);
 
     if (skillRes.data) setSkill(skillRes.data);
@@ -50,7 +88,6 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
-      // Call your custom Express backend instead of Supabase Edge Functions
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trade`, {
         method: 'POST',
         headers: {
@@ -71,7 +108,7 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
       }
 
       setSuccess(`Successfully ${tradeType === 'buy' ? 'bought' : 'sold'} ${quantity} units!`);
-      await refreshProfile(); // Update balance in UI
+      await refreshProfile();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -91,9 +128,25 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
   const isPositive = priceChange >= 0;
   const totalCost = skill.current_price * quantity;
 
-  const minPrice = Math.min(...priceHistory.map(p => p.price));
-  const maxPrice = Math.max(...priceHistory.map(p => p.price));
-  const priceRange = maxPrice - minPrice || 1;
+  // Handle cases where there are no trades in the selected timeframe
+  const minPrice = priceHistory.length > 0 ? Math.min(...priceHistory.map(p => p.price)) : skill.current_price;
+  const maxPrice = priceHistory.length > 0 ? Math.max(...priceHistory.map(p => p.price)) : skill.current_price;
+  
+  // Format data for Recharts based on Timeframe
+  const chartData = priceHistory.map(p => {
+    const date = new Date(p.created_at);
+    let timeLabel = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // Add Month/Day to the label if we are looking at 1W or ALL
+    if (timeframe === '1W' || timeframe === 'ALL') {
+      timeLabel = `${date.getDate()}/${date.getMonth() + 1} ${timeLabel}`;
+    }
+
+    return {
+      time: timeLabel,
+      price: p.price
+    };
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -123,47 +176,74 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Price History</h2>
-            <div className="h-64 relative">
+            
+            {/* Header + Timeframe Controls */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+              <h2 className="text-xl font-bold text-gray-900">Price History</h2>
+              
+              <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+                {(['1H', '1D', '1W', 'ALL'] as Timeframe[]).map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => setTimeframe(tf)}
+                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+                      timeframe === tf
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="h-72 w-full relative">
               {priceHistory.length > 1 ? (
-                <svg className="w-full h-full" viewBox="0 0 800 200" preserveAspectRatio="none">
-                  {priceHistory.map((p, i) => {
-                    if (i === 0) return null; 
-                    
-                    const prev = priceHistory[i - 1];
-                    
-                    const x1 = ((i - 1) / (priceHistory.length - 1)) * 800;
-                    const y1 = 200 - ((prev.price - minPrice) / priceRange) * 180;
-                    
-                    const x2 = (i / (priceHistory.length - 1)) * 800;
-                    const y2 = 200 - ((p.price - minPrice) / priceRange) * 180;
-
-                    const isUp = p.price >= prev.price;
-                    const strokeColor = isUp ? '#22c55e' : '#ef4444'; 
-
-                    return (
-                      <line
-                        key={p.id || i}
-                        x1={x1}
-                        y1={y1}
-                        x2={x2}
-                        y2={y2}
-                        stroke={strokeColor}
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                      />
-                    );
-                  })}
-                </svg>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart 
+                    data={chartData}
+                    margin={{ top: 10, right: 0, left: 0, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={isPositive ? '#22c55e' : '#ef4444'} stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor={isPositive ? '#22c55e' : '#ef4444'} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="time" hide />
+                    <YAxis domain={['dataMin', 'dataMax']} hide />
+                    <Tooltip
+                      cursor={{ stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '4 4' }}
+                      contentStyle={{ 
+                        borderRadius: '8px', 
+                        border: 'none', 
+                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' 
+                      }}
+                      labelStyle={{ color: '#6b7280', marginBottom: '4px' }}
+                      formatter={(value: number) => [`${value.toFixed(2)} JC`, 'Price']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="price"
+                      stroke={isPositive ? '#22c55e' : '#ef4444'}
+                      strokeWidth={3}
+                      fillOpacity={1}
+                      fill="url(#colorPrice)"
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               ) : (
-                <div className="flex items-center justify-center h-full text-gray-400">
+                <div className="flex items-center justify-center h-full text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-200">
                   {priceHistory.length === 1 
-                    ? 'Not enough price history to draw a trend' 
-                    : 'No price history available'}
+                    ? `Not enough data in the last ${timeframe} to draw a trend` 
+                    : `No price history available in the last ${timeframe}`}
                 </div>
               )}
             </div>
-            <div className="flex justify-between text-sm text-gray-600 mt-2">
+            
+            <div className="flex justify-between text-sm text-gray-500 mt-4 font-medium">
               <span>Min: {minPrice.toFixed(2)} JC</span>
               <span>Max: {maxPrice.toFixed(2)} JC</span>
             </div>
