@@ -55,7 +55,8 @@ function AppContent() {
         ) : (
           <>
             {currentPage === 'dashboard' && <Dashboard onNavigateToSkill={handleNavigateToSkill} />}
-            {currentPage === 'wallet' && <Wallet />}
+            {/* Added onNavigateToSkill prop here */}
+            {currentPage === 'wallet' && <Wallet onNavigateToSkill={handleNavigateToSkill} />}
             {currentPage === 'leaderboard' && <Leaderboard />}
             {currentPage === 'profile' && <Profile />}
           </>

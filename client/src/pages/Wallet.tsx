@@ -8,7 +8,13 @@ interface HoldingWithSkill extends Holding {
   current_price: number;
 }
 
-export const Wallet = () => {
+// Added interface for Wallet props
+interface WalletProps {
+  onNavigateToSkill: (skillId: string) => void;
+}
+
+// Accept the onNavigateToSkill prop
+export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
   const { profile, user } = useAuth();
   const [holdings, setHoldings] = useState<HoldingWithSkill[]>([]);
   const [trades, setTrades] = useState<(Trade & { skill_name: string })[]>([]);
@@ -150,7 +156,11 @@ export const Wallet = () => {
                 const plPercent = (pl / invested) * 100;
 
                 return (
-                  <div key={holding.skill_id} className="border border-gray-200 rounded-lg p-4">
+                  <div 
+                    key={holding.skill_id} 
+                    onClick={() => onNavigateToSkill(holding.skill_id)}
+                    className="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                  >
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="font-bold text-gray-900">{holding.skill_name}</h3>
                       <div className="text-right">
@@ -194,7 +204,11 @@ export const Wallet = () => {
           {trades.length > 0 ? (
             <div className="space-y-2">
               {trades.map((trade) => (
-                <div key={trade.id} className="border border-gray-200 rounded-lg p-3">
+                <div 
+                  key={trade.id} 
+                  onClick={() => onNavigateToSkill(trade.skill_id)}
+                  className="border border-gray-200 rounded-lg p-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                >
                   <div className="flex justify-between items-start mb-1">
                     <div>
                       <p className="font-medium text-gray-900">{trade.skill_name}</p>
