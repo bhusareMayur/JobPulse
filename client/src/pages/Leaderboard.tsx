@@ -24,7 +24,7 @@ export const Leaderboard = () => {
   const fetchLeaderboard = async () => {
     try {
       // Call the Express backend instead of the Supabase Edge Function
-      const response = await fetch('http://localhost:3000/api/leaderboard');
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/leaderboard`);
       
       const data = await response.json();
       if (data.leaderboard) {
