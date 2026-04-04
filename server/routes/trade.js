@@ -1,43 +1,47 @@
+// server/routes/trade.js
 import express from 'express';
-import { supabaseAdmin, authenticateUser } from '../server.js';
+import { z } from 'zod';
+import { supabase } from '../config/supabase.js';
+import { authenticateUser } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.post('/execute-trade', authenticateUser, async (req, res) => {
-  const { skillId, type, quantity } = req.body;
-  const userId = req.user.id;
+// Define the exact shape and rules for a trade request
+const tradeSchema = z.object({
+  skillId: z.string().uuid({ message: "Invalid skill ID format. Must be a valid UUID." }),
+  type: z.enum(['buy', 'sell'], { errorMap: () => ({ message: "Trade type must be exactly 'buy' or 'sell'." }) }),
+  quantity: z.number().int().positive({ message: "Quantity must be a positive whole number." })
+});
 
+router.post('/', authenticateUser, async (req, res) => {
   try {
-    // 1. Fetch current data
-    const { data: skill } = await supabaseAdmin.from('skills').select('*').eq('id', skillId).single();
-    const { data: profile } = await supabaseAdmin.from('profiles').select('balance').eq('id', userId).single();
+    // 1. Strictly validate the incoming request body using Zod
+    const validationResult = tradeSchema.safeParse(req.body);
+    
+    // If validation fails, return a 400 Bad Request with the specific error message
+    if (!validationResult.success) {
+      return res.status(400).json({ 
+        error: validationResult.error.errors[0].message 
+      });
+    }
 
-    const totalCost = Number(skill.current_price) * quantity;
+    // 2. Extract the safely validated data
+    const { skillId, type, quantity } = validationResult.data;
+    const userId = req.user.id;
 
-    if (type === 'buy') {
-      if (profile.balance < totalCost) throw new Error('Insufficient JobCoins');
-
-      // Update balance & price logic (+0.01 per unit)
-      const newPrice = Number(skill.current_price) + (quantity * 0.01);
-      
-      await supabaseAdmin.from('profiles').update({ balance: profile.balance - totalCost }).eq('id', userId);
-      await supabaseAdmin.from('skills').update({ current_price: newPrice }).eq('id', skillId);
-    } 
-    // Add 'sell' logic here following similar patterns...
-
-    // 2. Record trade and update holdings
-    await supabaseAdmin.from('trades').insert({
-      user_id: userId,
-      skill_id: skillId,
-      type,
-      quantity,
-      price: skill.current_price,
-      total_value: totalCost
+    // 3. Call the Supabase RPC to handle the transaction atomically
+    const { data, error } = await supabase.rpc('execute_trade', {
+      p_user_id: userId,
+      p_skill_id: skillId,
+      p_type: type,
+      p_quantity: quantity
     });
 
-    res.json({ success: true, message: 'Trade successful' });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+    if (error) throw new Error(error.message);
+
+    res.json(data);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 

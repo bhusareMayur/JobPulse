@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // <-- Import React Query
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './components/Auth/Login';
 import { Signup } from './components/Auth/Signup';
@@ -10,18 +11,23 @@ import { Wallet } from './pages/Wallet';
 import { Leaderboard } from './pages/Leaderboard';
 import { Profile } from './pages/Profile';
 
-// 1. Helper component to bridge the URL parameters to your existing SkillDetail component
+// 1. Initialize the Query Client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // Data stays fresh for 5 minutes by default
+      refetchOnWindowFocus: true, // Auto-refetch live prices when user switches tabs back
+    },
+  },
+});
+
 function SkillDetailRoute() {
   const { skillId } = useParams<{ skillId: string }>();
   const navigate = useNavigate();
-
   if (!skillId) return <div>Skill not found</div>;
-
-  // navigate(-1) tells the browser to go back one step in history!
   return <SkillDetail skillId={skillId} onBack={() => navigate(-1)} />;
 }
 
-// 2. The main routing component
 function AppRoutes() {
   const { user, loading } = useAuth();
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
@@ -43,16 +49,13 @@ function AppRoutes() {
     );
   }
 
-  // Use React Router's navigate function instead of updating state
   const handleNavigateToSkill = (skillId: string) => {
     navigate(`/skill/${skillId}`);
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navbar no longer needs props, it handles its own active states via React Router */}
       <Navbar />
-
       <main>
         <Routes>
           <Route path="/" element={<Dashboard onNavigateToSkill={handleNavigateToSkill} />} />
@@ -66,14 +69,16 @@ function AppRoutes() {
   );
 }
 
-// 3. Wrap everything in BrowserRouter
+// 2. Wrap the app with QueryClientProvider
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }
 

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
 import { Trophy, Medal, TrendingUp } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useQuery } from '@tanstack/react-query';
 
 interface LeaderboardEntry {
   userId: string;
@@ -13,28 +13,18 @@ interface LeaderboardEntry {
 }
 
 export const Leaderboard = () => {
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
-  useEffect(() => {
-    fetchLeaderboard();
-  }, []);
-
-  const fetchLeaderboard = async () => {
-    try {
-      // Call the Express backend instead of the Supabase Edge Function
+  // 1. Replace manual state/effects with React Query
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['leaderboard'],
+    queryFn: async () => {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/leaderboard`);
-      
-      const data = await response.json();
-      if (data.leaderboard) {
-        setLeaderboard(data.leaderboard);
-      }
-    } catch (error) {
-      console.error('Failed to fetch leaderboard:', error);
-    }
-    setLoading(false);
-  };
+      if (!response.ok) throw new Error('Failed to fetch leaderboard');
+      return response.json();
+    },
+    refetchInterval: 10000, // Auto-refresh leaderboard every 10 seconds
+  });
 
   const getMedalIcon = (rank: number) => {
     if (rank === 1) return <Trophy className="w-6 h-6 text-yellow-500" />;
@@ -43,7 +33,7 @@ export const Leaderboard = () => {
     return null;
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -51,6 +41,16 @@ export const Leaderboard = () => {
     );
   }
 
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center h-64 text-red-600">
+        Error loading leaderboard data. Please try again.
+      </div>
+    );
+  }
+
+  // Extract safely from the query data
+  const leaderboard: LeaderboardEntry[] = data?.leaderboard || [];
   const userRank = leaderboard.findIndex(entry => entry.userId === user?.id) + 1;
 
   return (

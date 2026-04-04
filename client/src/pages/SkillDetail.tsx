@@ -3,6 +3,7 @@ import { ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase, Skill, PriceHistory } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 type Timeframe = '1H' | '1D' | '1W' | 'ALL';
 
@@ -18,11 +19,12 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
   
   const [quantity, setQuantity] = useState(1);
   const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+  
   const { profile, refreshProfile } = useAuth();
+  const queryClient = useQueryClient();
 
+  // Keep WebSockets for real-time chart updates
   useEffect(() => {
     fetchSkillData();
     
@@ -38,7 +40,6 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'price_history', filter: `skill_id=eq.${skillId}` }, (payload) => {
         setPriceHistory(prev => {
           const newHistory = [...prev, payload.new as PriceHistory];
-          // Keep up to 500 points to prevent lag, but don't truncate early on large timeframes
           return newHistory.length > 500 ? newHistory.slice(-500) : newHistory; 
         });
       })
@@ -48,7 +49,7 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
       supabase.removeChannel(skillChannel);
       supabase.removeChannel(historyChannel);
     };
-  }, [skillId, timeframe]); // Re-fetch when timeframe changes
+  }, [skillId, timeframe]);
 
   const fetchSkillData = async () => {
     let historyQuery = supabase
@@ -57,7 +58,6 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
       .eq('skill_id', skillId)
       .order('created_at', { ascending: true });
 
-    // Apply Timeframe Filters dynamically using JS Dates
     if (timeframe !== 'ALL') {
       const now = new Date();
       let pastDate = new Date();
@@ -67,7 +67,6 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
       
       historyQuery = historyQuery.gte('created_at', pastDate.toISOString());
     } else {
-      // For ALL, limit to prevent massive payload issues as the db grows
       historyQuery = historyQuery.limit(500); 
     }
 
@@ -80,41 +79,37 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
     if (historyRes.data) setPriceHistory(historyRes.data);
   };
 
-  const handleTrade = async () => {
-    setLoading(true);
-    setError('');
-    setSuccess('');
-
-    try {
+  // Implement React Query Mutation for Trade
+  const tradeMutation = useMutation({
+    mutationFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trade`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`
         },
-        body: JSON.stringify({ 
-          skillId, 
-          type: tradeType, 
-          quantity 
-        })
+        body: JSON.stringify({ skillId, type: tradeType, quantity })
       });
 
       const result = await response.json();
-
       if (!response.ok || result.error) {
         throw new Error(result.error || 'Failed to execute trade');
       }
-
-      setSuccess(`Successfully ${tradeType === 'buy' ? 'bought' : 'sold'} ${quantity} units!`);
-      await refreshProfile();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      return result;
+    },
+    onSuccess: () => {
+      // Invalidate relevant queries so the rest of the app updates automatically
+      queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      
+      setSuccessMsg(`Successfully ${tradeType === 'buy' ? 'bought' : 'sold'} ${quantity} units!`);
+      refreshProfile(); // Refresh context profile balance
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMsg(''), 3000);
     }
-  };
+  });
 
   if (!skill) {
     return (
@@ -128,16 +123,13 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
   const isPositive = priceChange >= 0;
   const totalCost = skill.current_price * quantity;
 
-  // Handle cases where there are no trades in the selected timeframe
   const minPrice = priceHistory.length > 0 ? Math.min(...priceHistory.map(p => p.price)) : skill.current_price;
   const maxPrice = priceHistory.length > 0 ? Math.max(...priceHistory.map(p => p.price)) : skill.current_price;
   
-  // Format data for Recharts based on Timeframe
   const chartData = priceHistory.map(p => {
     const date = new Date(p.created_at);
     let timeLabel = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
-    // Add Month/Day to the label if we are looking at 1W or ALL
     if (timeframe === '1W' || timeframe === 'ALL') {
       timeLabel = `${date.getDate()}/${date.getMonth() + 1} ${timeLabel}`;
     }
@@ -176,8 +168,6 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            
-            {/* Header + Timeframe Controls */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
               <h2 className="text-xl font-bold text-gray-900">Price History</h2>
               
@@ -338,28 +328,30 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
               )}
             </div>
 
-            {error && (
+            {/* Display React Query Error */}
+            {tradeMutation.error && (
               <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">
-                {error}
+                {tradeMutation.error.message}
               </div>
             )}
 
-            {success && (
+            {/* Display Success */}
+            {successMsg && (
               <div className="bg-green-50 text-green-700 px-4 py-3 rounded-lg text-sm mb-4">
-                {success}
+                {successMsg}
               </div>
             )}
 
             <button
-              onClick={handleTrade}
-              disabled={loading || (tradeType === 'buy' && totalCost > (profile?.balance || 0))}
+              onClick={() => tradeMutation.mutate()}
+              disabled={tradeMutation.isPending || (tradeType === 'buy' && totalCost > (profile?.balance || 0))}
               className={`w-full py-3 rounded-lg font-bold transition-colors ${
                 tradeType === 'buy'
                   ? 'bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-300'
                   : 'bg-red-600 hover:bg-red-700 text-white disabled:bg-gray-300'
               }`}
             >
-              {loading ? 'Processing...' : tradeType === 'buy' ? 'Buy Now' : 'Sell Now'}
+              {tradeMutation.isPending ? 'Processing...' : tradeType === 'buy' ? 'Buy Now' : 'Sell Now'}
             </button>
           </div>
         </div>
