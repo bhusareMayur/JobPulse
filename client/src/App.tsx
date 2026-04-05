@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, useParams, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // <-- Import React Query
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './components/Auth/Login';
@@ -10,6 +9,7 @@ import { SkillDetail } from './pages/SkillDetail';
 import { Wallet } from './pages/Wallet';
 import { Leaderboard } from './pages/Leaderboard';
 import { Profile } from './pages/Profile';
+import Landing from './pages/Landing'; // <-- Import the new Landing page
 
 // 1. Initialize the Query Client
 const queryClient = new QueryClient({
@@ -30,7 +30,6 @@ function SkillDetailRoute() {
 
 function AppRoutes() {
   const { user, loading } = useAuth();
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const navigate = useNavigate();
 
   if (loading) {
@@ -41,28 +40,45 @@ function AppRoutes() {
     );
   }
 
-  if (!user) {
-    return authMode === 'login' ? (
-      <Login onToggle={() => setAuthMode('signup')} />
-    ) : (
-      <Signup onToggle={() => setAuthMode('login')} />
-    );
-  }
-
   const handleNavigateToSkill = (skillId: string) => {
     navigate(`/skill/${skillId}`);
   };
 
+  // ---------------------------------------------------------
+  // PUBLIC ROUTES (Unauthenticated Users)
+  // ---------------------------------------------------------
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        
+        {/* We pass a navigate function to onToggle so your existing components can switch paths */}
+        <Route path="/login" element={<Login onToggle={() => navigate('/signup')} />} />
+        <Route path="/signup" element={<Signup onToggle={() => navigate('/login')} />} />
+        
+        {/* Catch-all: Redirect any unknown URLs to the landing page */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
+  }
+
+  // ---------------------------------------------------------
+  // PROTECTED ROUTES (Authenticated Users)
+  // ---------------------------------------------------------
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <main>
         <Routes>
+          {/* Dashboard takes over the root URL once logged in */}
           <Route path="/" element={<Dashboard onNavigateToSkill={handleNavigateToSkill} />} />
           <Route path="/wallet" element={<Wallet onNavigateToSkill={handleNavigateToSkill} />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/skill/:skillId" element={<SkillDetailRoute />} />
+          
+          {/* Catch-all: Redirect any unknown URLs to the dashboard */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </div>
