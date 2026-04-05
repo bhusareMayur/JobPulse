@@ -45,6 +45,20 @@ export const Profile = () => {
     }
   };
 
+  // WhatsApp Sharing Function
+  const handleWhatsAppShare = () => {
+    if (!profile?.referral_code) return;
+    
+    // Create the message with a slogan, code, and steps
+    const message = `🚀 Trade in-demand skills like stocks on JobPulse!\n\nSign up using my referral code and get an instant 500 JC bonus after your first trade.\n\n🔑 My Referral Code: *${profile.referral_code}*\n\nHow to claim:\n1️⃣ Go to https://job-pulse-pi.vercel.app/\n2️⃣ Sign up and enter my code\n3️⃣ Complete your first trade\n4️⃣ Get 500 JobCoins instantly! 💸`;
+    
+    // URL-encode the text to safely pass it to WhatsApp
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    
+    // Open WhatsApp in a new tab (works for both web and mobile)
+    window.open(whatsappUrl, '_blank');
+  };
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold text-gray-900 mb-8">My Profile</h1>
@@ -130,10 +144,11 @@ export const Profile = () => {
                 <h2 className="text-2xl font-bold">Referral Program</h2>
               </div>
 
-              {/* Code Copier */}
+              {/* Code Copier & WhatsApp Share */}
               <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-5 mb-6">
                 <p className="text-blue-100 text-sm font-medium mb-3 uppercase tracking-wider">Your Unique Code</p>
-                <div className="flex items-center justify-between bg-black/20 rounded-lg p-2 pl-4">
+                
+                <div className="flex items-center justify-between bg-black/20 rounded-lg p-2 pl-4 mb-4">
                   <span className="text-3xl font-bold tracking-widest font-mono text-white">
                     {profile?.referral_code}
                   </span>
@@ -149,6 +164,24 @@ export const Profile = () => {
                     )}
                   </button>
                 </div>
+
+                {/* WhatsApp Share Button */}
+                <button
+                  onClick={handleWhatsAppShare}
+                  className="w-full bg-[#25D366] hover:bg-[#1ebd5b] text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors shadow-sm"
+                >
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    width="24" 
+                    height="24" 
+                    viewBox="0 0 24 24" 
+                    fill="white"
+                    className="w-6 h-6"
+                  >
+                    <path d="M12.031 0C5.385 0 0 5.385 0 12.031c0 2.12.553 4.188 1.603 6.012L.15 24l6.103-1.6c1.782.96 3.79 1.464 5.778 1.464h.005C18.681 23.864 24 18.479 24 11.833 24 5.187 18.615 0 12.031 0zm0 21.864h-.003c-1.8 0-3.565-.483-5.111-1.396l-.367-.217-3.799.996 1.015-3.705-.238-.378c-.999-1.591-1.528-3.432-1.528-5.333 0-5.507 4.484-9.99 9.993-9.99 2.666 0 5.174 1.04 7.06 2.927 1.884 1.885 2.921 4.394 2.921 7.061-.002 5.51-4.488 9.995-9.995 9.995zm5.474-7.48c-.3-.15-1.774-.875-2.048-.975-.274-.1-.474-.15-.674.15-.2.3-.774.975-.949 1.175-.175.2-.35.225-.65.075-.3-.15-1.265-.466-2.408-1.488-.888-.795-1.488-1.776-1.663-2.076-.175-.3-.019-.462.131-.612.135-.135.3-.35.45-.525.15-.175.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.674-1.625-.924-2.225-.243-.585-.49-.505-.674-.515-.175-.008-.375-.008-.575-.008-.2 0-.525.075-.8.375-.275.3-1.049 1.025-1.049 2.5 0 1.475 1.074 2.9 1.224 3.1.15.2 2.115 3.226 5.124 4.526.716.31 1.274.495 1.709.633.718.228 1.37.195 1.886.118.58-.086 1.774-.725 2.024-1.425.25-.7.25-1.3.175-1.425-.075-.125-.275-.2-.575-.35z"/>
+                  </svg>
+                  <span>Share via WhatsApp</span>
+                </button>
               </div>
 
               {/* How it works & Rewards */}
@@ -161,7 +194,7 @@ export const Profile = () => {
                   <ul className="space-y-3 text-blue-50 text-sm">
                     <li className="flex items-start space-x-3">
                       <span className="font-bold text-blue-300 mt-0.5">1.</span>
-                      <span>Share your code with friends to join SkillMarket.</span>
+                      <span>Share your code with friends to join JobPulse.</span>
                     </li>
                     <li className="flex items-start space-x-3">
                       <span className="font-bold text-blue-300 mt-0.5">2.</span>
