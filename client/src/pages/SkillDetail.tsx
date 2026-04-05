@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, TrendingUp, TrendingDown, Briefcase } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase, Skill, PriceHistory } from '../lib/supabase';
@@ -13,7 +13,6 @@ interface SkillDetailProps {
 }
 
 // Extending the Skill interface locally to include the new external data fields
-// (You should also add these to client/src/lib/supabase.ts)
 interface ExtendedSkill extends Skill {
   current_job_listings?: number;
   external_demand_score?: number;
@@ -28,12 +27,29 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
   const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy');
   const [successMsg, setSuccessMsg] = useState('');
   
-  const { profile, refreshProfile } = useAuth();
+  // NEW: Track user's holdings
+  const [userHolding, setUserHolding] = useState<number>(0);
+  
+  // Extract user along with profile and refreshProfile
+  const { user, profile, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
 
-  // Keep WebSockets for real-time chart updates
+  const fetchHoldingData = useCallback(async () => {
+    if (!user?.id) return;
+    const { data } = await supabase
+      .from('holdings')
+      .select('quantity')
+      .eq('user_id', user.id)
+      .eq('skill_id', skillId)
+      .maybeSingle();
+
+    setUserHolding(data?.quantity || 0);
+  }, [user?.id, skillId]);
+
+  // Fetch skill and holding data on mount
   useEffect(() => {
     fetchSkillData();
+    fetchHoldingData();
     
     const skillChannel = supabase
       .channel(`skill-${skillId}`)
@@ -56,7 +72,7 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
       supabase.removeChannel(skillChannel);
       supabase.removeChannel(historyChannel);
     };
-  }, [skillId, timeframe]);
+  }, [skillId, timeframe, fetchHoldingData]);
 
   const fetchSkillData = async () => {
     let historyQuery = supabase
@@ -111,7 +127,9 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       
       setSuccessMsg(`Successfully ${tradeType === 'buy' ? 'bought' : 'sold'} ${quantity} units!`);
+      
       refreshProfile(); // Refresh context profile balance
+      fetchHoldingData(); // Instantly refresh the specific holding quantity
       
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMsg(''), 3000);
@@ -150,6 +168,10 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
   // Default external demand score to 1 if it hasn't been scraped yet
   const demandScore = skill.external_demand_score || 1;
   const isBullish = demandScore >= 1;
+
+  // Validation Flags
+  const isInsufficientBalance = tradeType === 'buy' && totalCost > (profile?.balance || 0);
+  const isInsufficientQuantity = tradeType === 'sell' && quantity > userHolding;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -251,7 +273,6 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Market Stats Box */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Market Stats</h2>
               <div className="grid grid-cols-2 gap-4">
@@ -274,7 +295,6 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
               </div>
             </div>
 
-            {/* NEW: Real-World Job Market Box */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 relative overflow-hidden">
               <div className="absolute top-0 right-0 -mt-4 -mr-4 text-gray-100">
                 <Briefcase className="w-32 h-32 opacity-50" />
@@ -311,6 +331,12 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-20">
             <h2 className="text-xl font-bold text-gray-900 mb-6">Trade</h2>
 
+            {/* NEW: Display Holding Quantity */}
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6 flex justify-between items-center">
+              <span className="text-sm font-medium text-blue-900">Quantity you holding:</span>
+              <span className="text-xl font-bold text-blue-700">{userHolding}</span>
+            </div>
+
             <div className="flex space-x-2 mb-6">
               <button
                 onClick={() => setTradeType('buy')}
@@ -345,6 +371,10 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
                 onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+              {/* NEW: Validation error if trying to sell more than owned */}
+              {isInsufficientQuantity && (
+                <p className="text-sm text-red-600 mt-2 font-medium">Insufficient quantity to sell</p>
+              )}
             </div>
 
             <div className="bg-gray-50 rounded-lg p-4 mb-6 space-y-2">
@@ -368,7 +398,7 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
                 <span className="text-gray-600">Your Balance</span>
                 <span className="font-bold text-gray-900">{profile?.balance.toFixed(2)} JC</span>
               </div>
-              {tradeType === 'buy' && totalCost > (profile?.balance || 0) && (
+              {isInsufficientBalance && (
                 <p className="text-sm text-red-600">Insufficient balance</p>
               )}
             </div>
@@ -389,7 +419,8 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
 
             <button
               onClick={() => tradeMutation.mutate()}
-              disabled={tradeMutation.isPending || (tradeType === 'buy' && totalCost > (profile?.balance || 0))}
+              // NEW: Disable button if trying to sell more than they own
+              disabled={tradeMutation.isPending || isInsufficientBalance || isInsufficientQuantity}
               className={`w-full py-3 rounded-lg font-bold transition-colors ${
                 tradeType === 'buy'
                   ? 'bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-300'

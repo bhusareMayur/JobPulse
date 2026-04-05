@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { TrendingUp, TrendingDown, ArrowRight, Plus } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRight, Plus, Search } from 'lucide-react';
 import { supabase, Skill } from '../lib/supabase';
 import { AddSkillForm } from '../components/AddSkillForm';
 
@@ -11,6 +11,7 @@ export const Dashboard = ({ onNavigateToSkill }: DashboardProps) => {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchSkills();
@@ -43,6 +44,11 @@ export const Dashboard = ({ onNavigateToSkill }: DashboardProps) => {
     return change;
   };
 
+  // Filter skills based on the search term
+  const filteredSkills = skills.filter(skill =>
+    skill.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -53,19 +59,35 @@ export const Dashboard = ({ onNavigateToSkill }: DashboardProps) => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="flex justify-between items-end mb-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">JobPulse</h1>
-          <p className="text-gray-600">Trade skills based on real-time demand</p>
+          <p className="text-gray-600">Trade skills based on real-world demand</p>
         </div>
         
-        <button 
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Add Skill</span>
-        </button>
+        <div className="flex items-center space-x-4 w-full sm:w-auto">
+          {/* Search Input */}
+          <div className="relative w-full sm:w-64">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search skills..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+            />
+          </div>
+
+          <button 
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="hidden sm:inline">Add Skill</span>
+          </button>
+        </div>
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -81,56 +103,66 @@ export const Dashboard = ({ onNavigateToSkill }: DashboardProps) => {
         />
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {skills.map((skill) => {
-          const priceChange = getPriceChange(skill);
-          const isPositive = priceChange >= 0;
+      {/* Render filteredSkills instead of skills */}
+      {filteredSkills.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredSkills.map((skill) => {
+            const priceChange = getPriceChange(skill);
+            const isPositive = priceChange >= 0;
 
-          return (
-            <div
-              key={skill.id}
-              onClick={() => onNavigateToSkill(skill.id)}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-bold text-gray-900">{skill.name}</h3>
-                <div className={`flex items-center space-x-1 ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                  {isPositive ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                  <span className="text-sm font-bold">
-                    {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
-                  </span>
+            return (
+              <div
+                key={skill.id}
+                onClick={() => onNavigateToSkill(skill.id)}
+                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">{skill.name}</h3>
+                  <div className={`flex items-center space-x-1 ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                    {isPositive ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                    <span className="text-sm font-bold">
+                      {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Current Price</span>
+                    <span className="text-xl font-bold text-gray-900">
+                      {skill.current_price.toFixed(2)} JC
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">Initial Price</span>
+                    <span className="text-gray-700">{skill.initial_price.toFixed(2)} JC</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+                  <div className="text-sm">
+                    <span className="text-gray-600">Volume: </span>
+                    <span className="font-medium text-gray-900">
+                      {skill.total_buy_volume + skill.total_sell_volume}
+                    </span>
+                  </div>
+                  <button className="flex items-center space-x-1 text-blue-600 font-medium hover:text-blue-700">
+                    <span>Trade</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Current Price</span>
-                  <span className="text-xl font-bold text-gray-900">
-                    {skill.current_price.toFixed(2)} JC
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600">Initial Price</span>
-                  <span className="text-gray-700">{skill.initial_price.toFixed(2)} JC</span>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-                <div className="text-sm">
-                  <span className="text-gray-600">Volume: </span>
-                  <span className="font-medium text-gray-900">
-                    {skill.total_buy_volume + skill.total_sell_volume}
-                  </span>
-                </div>
-                <button className="flex items-center space-x-1 text-blue-600 font-medium hover:text-blue-700">
-                  <span>Trade</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* Empty State if search yields no results */
+        <div className="text-center py-12 bg-white rounded-lg border border-gray-200 shadow-sm">
+          <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-gray-900 mb-1">No skills found</h3>
+          <p className="text-gray-500">We couldn't find any skills matching "{searchTerm}"</p>
+        </div>
+      )}
     </div>
   );
 };
