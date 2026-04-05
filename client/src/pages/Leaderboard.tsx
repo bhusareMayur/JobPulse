@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 
 interface LeaderboardEntry {
   userId: string;
+  name?: string; // Made optional just in case
   email: string;
   balance: number;
   portfolioValue: number;
@@ -92,7 +93,10 @@ export const Leaderboard = () => {
                   Rank
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Trader
+                  Trader Name
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Account
                 </th>
                 <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
                   Portfolio Value
@@ -124,9 +128,13 @@ export const Leaderboard = () => {
                         <span className="text-lg font-bold text-gray-900">#{rank}</span>
                       </div>
                     </td>
+                    
+                    {/* Trader Name Column with Fallback */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
-                        <span className="font-medium text-gray-900">{entry.email}</span>
+                        <span className="font-bold text-gray-900">
+                          {entry.name || 'Unknown Trader'}
+                        </span>
                         {isCurrentUser && (
                           <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
                             You
@@ -134,6 +142,11 @@ export const Leaderboard = () => {
                         )}
                       </div>
                     </td>
+
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm text-gray-500">{entry.email}</span>
+                    </td>
+
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <span className="text-gray-900 font-medium">
                         {entry.portfolioValue.toFixed(2)} JC

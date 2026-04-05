@@ -6,6 +6,7 @@ interface SignupProps {
 }
 
 export const Signup = ({ onToggle }: SignupProps) => {
+  const [name, setName] = useState(''); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -20,6 +21,12 @@ export const Signup = ({ onToggle }: SignupProps) => {
     setError('');
     setSuccess(false);
 
+    // 1. Explicit validation to ensure name is not empty or just spaces
+    if (!name.trim()) {
+      setError('Full Name is required');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -32,7 +39,7 @@ export const Signup = ({ onToggle }: SignupProps) => {
 
     setLoading(true);
 
-    const { error } = await signUp(email, password, referralCode || undefined);
+    const { error } = await signUp(email, password, name.trim(), referralCode || undefined);
     if (error) {
       setError(error.message);
     } else {
@@ -74,7 +81,21 @@ export const Signup = ({ onToggle }: SignupProps) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
+              Full Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="e.g. Mayur Bhusare"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email <span className="text-red-500">*</span>
             </label>
             <input
               type="email"
@@ -87,7 +108,7 @@ export const Signup = ({ onToggle }: SignupProps) => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password
+              Password <span className="text-red-500">*</span>
             </label>
             <input
               type="password"
@@ -101,7 +122,7 @@ export const Signup = ({ onToggle }: SignupProps) => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Confirm Password
+              Confirm Password <span className="text-red-500">*</span>
             </label>
             <input
               type="password"

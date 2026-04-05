@@ -7,7 +7,8 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, referralCode?: string) => Promise<{ error: Error | null }>;
+  // 1. Updated the interface to include the name parameter
+  signUp: (email: string, password: string, name: string, referralCode?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -72,13 +73,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, referralCode?: string) => {
+  // 2. Updated the function definition to accept 'name'
+  const signUp = async (email: string, password: string, name: string, referralCode?: string) => {
     try {
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
+            full_name: name, // 3. Pass the name into Supabase user_metadata
             referred_by: referralCode || null,
           },
         },
