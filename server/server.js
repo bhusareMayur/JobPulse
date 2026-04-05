@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import tradeRoutes from './routes/trade.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import skillsRoutes from './routes/skills.js';
+import './workers/demandScraper.js';
 
 dotenv.config();
 

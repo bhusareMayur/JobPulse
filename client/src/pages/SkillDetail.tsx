@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Briefcase } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase, Skill, PriceHistory } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,8 +12,15 @@ interface SkillDetailProps {
   onBack: () => void;
 }
 
+// Extending the Skill interface locally to include the new external data fields
+// (You should also add these to client/src/lib/supabase.ts)
+interface ExtendedSkill extends Skill {
+  current_job_listings?: number;
+  external_demand_score?: number;
+}
+
 export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
-  const [skill, setSkill] = useState<Skill | null>(null);
+  const [skill, setSkill] = useState<ExtendedSkill | null>(null);
   const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
   const [timeframe, setTimeframe] = useState<Timeframe>('ALL');
   
@@ -31,7 +38,7 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
     const skillChannel = supabase
       .channel(`skill-${skillId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'skills', filter: `id=eq.${skillId}` }, (payload) => {
-        setSkill(payload.new as Skill);
+        setSkill(payload.new as ExtendedSkill);
       })
       .subscribe();
 
@@ -75,7 +82,7 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
       historyQuery,
     ]);
 
-    if (skillRes.data) setSkill(skillRes.data);
+    if (skillRes.data) setSkill(skillRes.data as ExtendedSkill);
     if (historyRes.data) setPriceHistory(historyRes.data);
   };
 
@@ -139,6 +146,10 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
       price: p.price
     };
   });
+
+  // Default external demand score to 1 if it hasn't been scraped yet
+  const demandScore = skill.external_demand_score || 1;
+  const isBullish = demandScore >= 1;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -239,24 +250,58 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Market Stats</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-gray-600">Initial Price</p>
-                <p className="text-lg font-bold text-gray-900">{skill.initial_price.toFixed(2)} JC</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Market Stats Box */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Market Stats</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Initial Price</p>
+                  <p className="text-lg font-bold text-gray-900">{skill.initial_price.toFixed(2)} JC</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Volume</p>
+                  <p className="text-lg font-bold text-gray-900">{skill.total_buy_volume + skill.total_sell_volume}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Buy Volume</p>
+                  <p className="text-lg font-bold text-green-600">{skill.total_buy_volume}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Sell Volume</p>
+                  <p className="text-lg font-bold text-red-600">{skill.total_sell_volume}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Volume</p>
-                <p className="text-lg font-bold text-gray-900">{skill.total_buy_volume + skill.total_sell_volume}</p>
+            </div>
+
+            {/* NEW: Real-World Job Market Box */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 relative overflow-hidden">
+              <div className="absolute top-0 right-0 -mt-4 -mr-4 text-gray-100">
+                <Briefcase className="w-32 h-32 opacity-50" />
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Buy Volume</p>
-                <p className="text-lg font-bold text-green-600">{skill.total_buy_volume}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Sell Volume</p>
-                <p className="text-lg font-bold text-red-600">{skill.total_sell_volume}</p>
+              <div className="relative z-10">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Real-World Demand</h2>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Active Job Listings</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {skill.current_job_listings ? skill.current_job_listings.toLocaleString() : 'Syncing...'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Market Trend</p>
+                    <div className="flex items-center space-x-2">
+                      {isBullish ? (
+                        <TrendingUp className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <TrendingDown className="w-5 h-5 text-red-600" />
+                      )}
+                      <p className={`text-lg font-bold ${isBullish ? 'text-green-600' : 'text-red-600'}`}>
+                        {isBullish ? 'Bullish (Hiring Up)' : 'Bearish (Hiring Down)'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
