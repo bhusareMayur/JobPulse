@@ -4,7 +4,21 @@ import { supabase } from '../config/supabase.js';
 
 const router = express.Router();
 
+// --- IN-MEMORY CACHE SETUP ---
+let cachedLeaderboard = null;
+let lastFetchTime = 0;
+const CACHE_TTL = 10000; // Cache duration: 10 seconds (in milliseconds)
+
 router.get('/', async (req, res) => {
+  const now = Date.now();
+
+  // 1. Check if we have fresh cached data
+  if (cachedLeaderboard && (now - lastFetchTime < CACHE_TTL)) {
+    console.log('Serving leaderboard from cache');
+    return res.json({ leaderboard: cachedLeaderboard });
+  }
+
+  console.log('Fetching fresh leaderboard from Supabase...');
   try {
     const { data: leaderboardData, error: viewErr } = await supabase
       .from('leaderboard_view')
@@ -57,8 +71,13 @@ router.get('/', async (req, res) => {
       };
     });
 
+    // 2. Update the cache with the newly fetched data
+    cachedLeaderboard = leaderboard;
+    lastFetchTime = now;
+
     res.json({ leaderboard });
   } catch (error) {
+    console.error("Leaderboard Error:", error.message);
     res.status(500).json({ error: error.message });
   }
 });

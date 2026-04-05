@@ -12,12 +12,14 @@ import { Leaderboard } from './pages/Leaderboard';
 import { Profile } from './pages/Profile';
 import Landing from './pages/Landing'; // <-- Import the new Landing page
 
-// 1. Initialize the Query Client
+// 1. Initialize the Query Client with Launch-Safe Options
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // Data stays fresh for 5 minutes by default
-      refetchOnWindowFocus: true, // Auto-refetch live prices when user switches tabs back
+      staleTime: 1000 * 60 * 1, // Data stays fresh for 1 minute
+      gcTime: 1000 * 60 * 5, // Keep in garbage collection for 5 mins
+      refetchOnWindowFocus: false, // 🚨 CRITICAL FIX: Prevents DDOS when hundreds of students switch tabs at once
+      retry: 1, // Only retry failed requests once to avoid hammering a struggling server
     },
   },
 });
