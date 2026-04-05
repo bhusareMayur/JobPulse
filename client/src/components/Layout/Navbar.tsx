@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { TrendingUp, Wallet, Trophy, User, LogOut, History, ChevronDown } from 'lucide-react';
+import { TrendingUp, Wallet, Trophy, User, LogOut, History, ChevronDown, Target, Map } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { NavLink, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -22,11 +22,12 @@ export const Navbar = () => {
   const [loadingTrades, setLoadingTrades] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const navItems = [
+ const navItems = [
     { path: '/', label: 'Market', icon: TrendingUp },
+    { path: '/target', label: 'Company Target', icon: Target },
+    { path: '/roadmap', label: 'Action Plan', icon: Map }, 
     { path: '/wallet', label: 'Skill Portfolio', icon: Wallet },
     { path: '/leaderboard', label: 'Top Analysts', icon: Trophy },
-    { path: '/profile', label: 'Profile', icon: User },
   ];
 
   // Close dropdown when clicking outside

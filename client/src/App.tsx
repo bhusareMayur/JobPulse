@@ -12,6 +12,8 @@ import { Leaderboard } from './pages/Leaderboard';
 import { Profile } from './pages/Profile';
 import Landing from './pages/Landing'; // <-- Import the new Landing page
 import { HodDashboard } from './pages/HodDashboard';
+import { CompanyTarget } from './pages/CompanyTarget';
+import { RoadmapGenerator } from './pages/RoadmapGenerator';
 
 // 1. Initialize the Query Client with Launch-Safe Options
 const queryClient = new QueryClient({
@@ -80,27 +82,24 @@ function AppRoutes() {
   // PROTECTED ROUTES (Authenticated Users)
   // ---------------------------------------------------------
   return (
-    // Added flex and flex-col to enable the sticky footer
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Navbar />
-      
-      {/* Added flex-grow so the main content pushes the footer down */}
       <main className="flex-grow">
         <Routes>
-          {/* Dashboard takes over the root URL once logged in */}
           <Route path="/" element={<Dashboard onNavigateToSkill={handleNavigateToSkill} />} />
+          <Route path="/target" element={<CompanyTarget />} />
+          
+          {/* Add the roadmap route here */}
+          <Route path="/roadmap" element={<RoadmapGenerator />} />
+          
           <Route path="/wallet" element={<Wallet onNavigateToSkill={handleNavigateToSkill} />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/skill/:skillId" element={<SkillDetailRoute />} />
           <Route path="/admin/hod" element={<HodDashboard />} />
-          
-          {/* Catch-all: Redirect any unknown URLs to the dashboard */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-
-      {/* Inserted the Footer component here for protected pages */}
       <Footer />
     </div>
   );
