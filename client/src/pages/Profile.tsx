@@ -31,7 +31,7 @@ export const Profile = () => {
       }
       setTotalWealth((profile?.balance || 0) + portfolioValue);
     } catch (error) {
-      console.error('Error calculating wealth:', error);
+      console.error('Error calculating portfolio score:', error);
     } finally {
       setLoadingWealth(false);
     }
@@ -49,8 +49,8 @@ export const Profile = () => {
   const handleWhatsAppShare = () => {
     if (!profile?.referral_code) return;
     
-    // Create the message with a slogan, code, and steps
-    const message = `🚀 Trade in-demand skills like stocks on JobPulse!\n\nSign up using my referral code and get an instant 500 JC bonus after your first trade.\n\n🔑 My Referral Code: *${profile.referral_code}*\n\nHow to claim:\n1️⃣ Go to https://job-pulse-pi.vercel.app/\n2️⃣ Sign up and enter my code\n3️⃣ Complete your first trade\n4️⃣ Get 500 JobCoins instantly! 💸`;
+    // Create the message with a slogan, code, and steps using educational language
+    const message = `🚀 Track in-demand career skills on the JobPulse Simulator!\n\nSign up using my invite code and get an instant 500 JC bonus after your first simulation.\n\n🔑 My Invite Code: *${profile.referral_code}*\n\nHow to claim:\n1️⃣ Go to https://job-pulse-pi.vercel.app/\n2️⃣ Sign up and enter my code\n3️⃣ Complete your first simulation\n4️⃣ Get 500 JC (JobCoins) instantly! 🎓`;
     
     // URL-encode the text to safely pass it to WhatsApp
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -89,14 +89,14 @@ export const Profile = () => {
               {/* Wealth Stats Grid */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                  <p className="text-sm text-gray-500 mb-1 font-medium">Cash Balance</p>
+                  <p className="text-sm text-gray-500 mb-1 font-medium">Available Credits</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {profile?.balance.toFixed(2)} JC
                   </p>
                 </div>
                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
                   <p className="text-sm text-blue-700 mb-1 font-medium flex items-center">
-                    <Wallet className="w-4 h-4 mr-1" /> Total Wealth
+                    <Wallet className="w-4 h-4 mr-1" /> Total Portfolio Score
                   </p>
                   {loadingWealth ? (
                     <div className="h-8 w-24 bg-blue-200 rounded animate-pulse"></div>
@@ -141,12 +141,12 @@ export const Profile = () => {
             <div className="relative z-10">
               <div className="flex items-center space-x-3 mb-8">
                 <Share2 className="w-8 h-8 text-blue-200" />
-                <h2 className="text-2xl font-bold">Referral Program</h2>
+                <h2 className="text-2xl font-bold">Invite Fellow Analysts</h2>
               </div>
 
               {/* Code Copier & WhatsApp Share */}
               <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-5 mb-6">
-                <p className="text-blue-100 text-sm font-medium mb-3 uppercase tracking-wider">Your Unique Code</p>
+                <p className="text-blue-100 text-sm font-medium mb-3 uppercase tracking-wider">Your Unique Invite Code</p>
                 
                 <div className="flex items-center justify-between bg-black/20 rounded-lg p-2 pl-4 mb-4">
                   <span className="text-3xl font-bold tracking-widest font-mono text-white">
@@ -194,15 +194,15 @@ export const Profile = () => {
                   <ul className="space-y-3 text-blue-50 text-sm">
                     <li className="flex items-start space-x-3">
                       <span className="font-bold text-blue-300 mt-0.5">1.</span>
-                      <span>Share your code with friends to join JobPulse.</span>
+                      <span>Share your code with peers to join JobPulse.</span>
                     </li>
                     <li className="flex items-start space-x-3">
                       <span className="font-bold text-blue-300 mt-0.5">2.</span>
-                      <span>They sign up using your referral code.</span>
+                      <span>They sign up using your invite code.</span>
                     </li>
                     <li className="flex items-start space-x-3">
                       <span className="font-bold text-blue-300 mt-0.5">3.</span>
-                      <span>After their first trade, you both get paid instantly!</span>
+                      <span>After their first simulation, you both receive bonus JC!</span>
                     </li>
                   </ul>
                 </div>
@@ -216,7 +216,7 @@ export const Profile = () => {
                     </div>
                     <div className="text-center bg-black/20 rounded-lg p-3">
                       <p className="text-2xl font-bold text-blue-300">500 JC</p>
-                      <p className="text-xs text-blue-200 mt-1 uppercase font-medium">For Friend</p>
+                      <p className="text-xs text-blue-200 mt-1 uppercase font-medium">For Peer</p>
                     </div>
                   </div>
                 </div>
@@ -226,7 +226,7 @@ export const Profile = () => {
               {profile?.referred_by && (
                 <div className="mt-6 bg-white/5 border border-white/10 backdrop-blur-sm rounded-xl p-4 flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-blue-200 uppercase tracking-wider mb-1">Referred By</p>
+                    <p className="text-xs text-blue-200 uppercase tracking-wider mb-1">Invited By</p>
                     <p className="font-bold text-white font-mono">{profile.referred_by}</p>
                   </div>
                   {profile.referral_rewarded && (
@@ -248,7 +248,7 @@ export const Profile = () => {
         <div>
           <h3 className="font-bold text-amber-900 mb-1">Important Note</h3>
           <p className="text-sm text-amber-800 leading-relaxed">
-            Referral rewards are automatically credited to your wallet immediately after the referred user successfully completes their first trade on the platform. Both you and your friend will receive the bonus JobCoins instantly!
+            Invite rewards are automatically credited to your portfolio immediately after the referred user successfully completes their first simulation on the platform. Both you and your peer will receive the bonus JC instantly!
           </p>
         </div>
       </div>

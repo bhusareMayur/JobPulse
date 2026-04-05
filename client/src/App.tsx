@@ -11,6 +11,7 @@ import { Wallet } from './pages/Wallet';
 import { Leaderboard } from './pages/Leaderboard';
 import { Profile } from './pages/Profile';
 import Landing from './pages/Landing'; // <-- Import the new Landing page
+import { HodDashboard } from './pages/HodDashboard';
 
 // 1. Initialize the Query Client with Launch-Safe Options
 const queryClient = new QueryClient({
@@ -62,6 +63,7 @@ function AppRoutes() {
             {/* We pass a navigate function to onToggle so your existing components can switch paths */}
             <Route path="/login" element={<Login onToggle={() => navigate('/signup')} />} />
             <Route path="/signup" element={<Signup onToggle={() => navigate('/login')} />} />
+            <Route path="/admin/hod" element={<HodDashboard />} />
             
             {/* Catch-all: Redirect any unknown URLs to the landing page */}
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -91,6 +93,7 @@ function AppRoutes() {
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/skill/:skillId" element={<SkillDetailRoute />} />
+          <Route path="/admin/hod" element={<HodDashboard />} />
           
           {/* Catch-all: Redirect any unknown URLs to the dashboard */}
           <Route path="*" element={<Navigate to="/" replace />} />

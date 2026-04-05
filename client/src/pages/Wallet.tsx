@@ -122,7 +122,7 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
         title: isReferrer ? 'Referral Reward' : 'Welcome Bonus',
         amount: isReferrer ? r.referrer_amount : r.referee_amount,
         date: r.paid_at,
-        details: isReferrer ? 'You referred a new trader' : 'Referred by a friend',
+        details: isReferrer ? 'You referred a new analyst' : 'Referred by a friend',
         skill_id: null
       };
     });
@@ -167,13 +167,13 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">My Wallet</h1>
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">My Skill Portfolio</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center space-x-2 mb-2">
             <WalletIcon className="w-5 h-5 text-gray-600" />
-            <span className="text-sm text-gray-600">Cash Balance</span>
+            <span className="text-sm text-gray-600">Available Credits</span>
           </div>
           <p className="text-2xl font-bold text-gray-900">{profile?.balance.toFixed(2)} JC</p>
         </div>
@@ -192,7 +192,7 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center space-x-2 mb-2">
             <WalletIcon className="w-5 h-5 text-gray-600" />
-            <span className="text-sm text-gray-600">Total Wealth</span>
+            <span className="text-sm text-gray-600">Total Portfolio Score</span>
           </div>
           <p className="text-2xl font-bold text-gray-900">{totalWealth.toFixed(2)} JC</p>
         </div>
@@ -204,7 +204,7 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
             ) : (
               <TrendingDown className="w-5 h-5 text-red-600" />
             )}
-            <span className="text-sm text-gray-600">Overall P&L</span>
+            <span className="text-sm text-gray-600">Overall Growth</span>
           </div>
           <p className={`text-2xl font-bold ${overallPL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {overallPL >= 0 ? '+' : ''}{overallPL.toFixed(2)} JC
@@ -217,7 +217,7 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">My Holdings</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-4">My Tracked Skills</h2>
           {holdings.length > 0 ? (
             <div className="space-y-3">
               {holdings.map((holding) => {
@@ -243,11 +243,11 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-sm">
                       <div>
-                        <p className="text-gray-600">Quantity</p>
+                        <p className="text-gray-600">Units</p>
                         <p className="font-medium text-gray-900">{holding.quantity}</p>
                       </div>
                       <div>
-                        <p className="text-gray-600">Avg Price</p>
+                        <p className="text-gray-600">Avg Score</p>
                         <p className="font-medium text-gray-900">{holding.average_buy_price.toFixed(2)}</p>
                       </div>
                       <div>
@@ -262,7 +262,7 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
           ) : (
             <div className="text-center py-12 text-gray-500">
               <p>No holdings yet</p>
-              <p className="text-sm">Start trading to build your portfolio</p>
+              <p className="text-sm">Start simulating to build your portfolio</p>
             </div>
           )}
         </div>
@@ -270,7 +270,7 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center space-x-2 mb-4">
             <History className="w-5 h-5 text-gray-600" />
-            <h2 className="text-xl font-bold text-gray-900">Transaction History</h2>
+            <h2 className="text-xl font-bold text-gray-900">Simulation History</h2>
           </div>
           {transactions.length > 0 ? (
             <div className="space-y-2">
@@ -300,7 +300,7 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
                           : 'bg-yellow-100 text-yellow-700'
                       }`}
                     >
-                      {tx.type === 'referral' ? 'BONUS' : tx.type.toUpperCase()}
+                      {tx.type === 'referral' ? 'BONUS' : (tx.type === 'buy' ? 'TRACK' : 'DROP')}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm items-center">
@@ -334,7 +334,7 @@ export const Wallet = ({ onNavigateToSkill }: WalletProps) => {
             </div>
           ) : (
             <div className="text-center py-12 text-gray-500">
-              <p>No transactions yet</p>
+              <p>No simulations yet</p>
               <p className="text-sm">Your activity will appear here</p>
             </div>
           )}

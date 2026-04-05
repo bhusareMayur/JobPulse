@@ -24,8 +24,8 @@ export const Navbar = () => {
 
   const navItems = [
     { path: '/', label: 'Market', icon: TrendingUp },
-    { path: '/wallet', label: 'Wallet', icon: Wallet },
-    { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
+    { path: '/wallet', label: 'Skill Portfolio', icon: Wallet },
+    { path: '/leaderboard', label: 'Top Analysts', icon: Trophy },
     { path: '/profile', label: 'Profile', icon: User },
   ];
 
@@ -143,7 +143,7 @@ export const Navbar = () => {
                 <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 hidden md:block">
                   <div className="px-4 py-2 border-b border-gray-100 flex items-center space-x-2">
                     <History className="w-4 h-4 text-gray-500" />
-                    <span className="font-bold text-gray-900 text-sm">Recent Transactions</span>
+                    <span className="font-bold text-gray-900 text-sm">Recent Simulations</span>
                   </div>
                   
                   <div className="max-h-80 overflow-y-auto">
@@ -164,7 +164,7 @@ export const Navbar = () => {
                                 tx.type === 'sell' ? 'bg-red-100 text-red-700' :
                                 'bg-yellow-100 text-yellow-700'
                               }`}>
-                                {tx.type === 'referral' ? 'BONUS' : tx.type.toUpperCase()}
+                                {tx.type === 'referral' ? 'BONUS' : (tx.type === 'buy' ? 'TRACK' : 'DROP')}
                               </span>
                             </div>
                             <div className="flex justify-between text-xs text-gray-500 items-center">
@@ -178,7 +178,7 @@ export const Navbar = () => {
                       </div>
                     ) : (
                       <div className="px-4 py-6 text-center text-sm text-gray-500">
-                        No transactions yet.
+                        No simulations yet.
                       </div>
                     )}
                   </div>

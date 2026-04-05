@@ -10,7 +10,9 @@ export const Signup = ({ onToggle }: SignupProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [graduationYear, setGraduationYear] = useState('2026'); // NEW: Default to seniors
   const [referralCode, setReferralCode] = useState('');
+  
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -21,7 +23,6 @@ export const Signup = ({ onToggle }: SignupProps) => {
     setError('');
     setSuccess(false);
 
-    // 1. Explicit validation to ensure name is not empty or just spaces
     if (!name.trim()) {
       setError('Full Name is required');
       return;
@@ -39,7 +40,9 @@ export const Signup = ({ onToggle }: SignupProps) => {
 
     setLoading(true);
 
-    const { error } = await signUp(email, password, name.trim(), referralCode || undefined);
+    // Pass the parsed graduationYear to the Auth Context
+    const { error } = await signUp(email, password, name.trim(), parseInt(graduationYear), referralCode || undefined);
+    
     if (error) {
       setError(error.message);
     } else {
@@ -58,7 +61,7 @@ export const Signup = ({ onToggle }: SignupProps) => {
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Account Created!</h2>
-          <p className="text-gray-600 mb-6">You've been credited with 10,000 JobCoins to start trading.</p>
+          <p className="text-gray-600 mb-6">You've been credited with 10,000 JC to build your portfolio.</p>
           <button
             onClick={onToggle}
             className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
@@ -75,7 +78,7 @@ export const Signup = ({ onToggle }: SignupProps) => {
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Join JobPulse</h1>
-          <p className="text-gray-600">Start with 10,000 JobCoins</p>
+          <p className="text-gray-600">Start with 10,000 JC</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -105,6 +108,25 @@ export const Signup = ({ onToggle }: SignupProps) => {
               required
             />
           </div>
+
+          {/* --- NEW: Graduation Batch Dropdown --- */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Graduation Batch <span className="text-red-500">*</span>
+            </label>
+            <select 
+              required
+              value={graduationYear}
+              onChange={(e) => setGraduationYear(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+            >
+              <option value="2026">2026 (4th Year / Placement Batch)</option>
+              <option value="2027">2027 (3rd Year)</option>
+              <option value="2028">2028 (2nd Year)</option>
+              <option value="2029">2029 (1st Year)</option>
+            </select>
+          </div>
+          {/* -------------------------------------- */}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -136,16 +158,16 @@ export const Signup = ({ onToggle }: SignupProps) => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Referral Code (Optional)
+              Invite Code (Optional)
             </label>
             <input
               type="text"
               value={referralCode}
               onChange={(e) => setReferralCode(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter referral code"
+              placeholder="Enter invite code"
             />
-            <p className="text-xs text-gray-500 mt-1">Get 500 JC bonus after your first trade!</p>
+            <p className="text-xs text-gray-500 mt-1">Get 500 JC bonus after your first simulation!</p>
           </div>
 
           {error && (

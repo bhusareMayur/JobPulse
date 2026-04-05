@@ -1,11 +1,12 @@
-import { Trophy, Medal, TrendingUp } from 'lucide-react';
+import { useState } from 'react';
+import { Trophy, Medal, TrendingUp, Filter } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 
 interface LeaderboardEntry {
   userId: string;
-  name?: string; // Made optional just in case
-  email: string;
+  name?: string;
+  batch: number;
   balance: number;
   portfolioValue: number;
   totalWealth: number;
@@ -15,16 +16,19 @@ interface LeaderboardEntry {
 
 export const Leaderboard = () => {
   const { user } = useAuth();
+  
+  // NEW: State to track the selected batch filter
+  const [selectedYear, setSelectedYear] = useState<string>('all');
 
-  // 1. Replace manual state/effects with React Query
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['leaderboard'],
+    // The query key now includes the selectedYear, so it refetches automatically when changed
+    queryKey: ['leaderboard', selectedYear],
     queryFn: async () => {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/leaderboard`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/leaderboard?year=${selectedYear}`);
       if (!response.ok) throw new Error('Failed to fetch leaderboard');
       return response.json();
     },
-    refetchInterval: 10000, // Auto-refresh leaderboard every 10 seconds
+    refetchInterval: 10000,
   });
 
   const getMedalIcon = (rank: number) => {
@@ -45,39 +49,56 @@ export const Leaderboard = () => {
   if (isError) {
     return (
       <div className="flex items-center justify-center h-64 text-red-600">
-        Error loading leaderboard data. Please try again.
+        Error loading data. Please try again.
       </div>
     );
   }
 
-  // Extract safely from the query data
   const leaderboard: LeaderboardEntry[] = data?.leaderboard || [];
   const userRank = leaderboard.findIndex(entry => entry.userId === user?.id) + 1;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Leaderboard</h1>
-        <p className="text-gray-600">Top traders ranked by profit</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Top Market Analysts</h1>
+          <p className="text-gray-600">Top analysts ranked by portfolio growth</p>
+        </div>
+
+        {/* --- NEW: BATCH FILTER DROPDOWN --- */}
+        <div className="flex items-center space-x-2 bg-white p-2 rounded-lg border border-gray-200 shadow-sm">
+          <Filter className="w-5 h-5 text-gray-400 ml-2" />
+          <select 
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(e.target.value)}
+            className="bg-transparent border-none text-gray-700 font-bold focus:ring-0 outline-none pr-4 py-1 cursor-pointer"
+          >
+            <option value="all">All Batches (Global)</option>
+            <option value="2026">2026 Batch (Seniors)</option>
+            <option value="2027">2027 Batch</option>
+            <option value="2028">2028 Batch</option>
+            <option value="2029">2029 Batch (Freshers)</option>
+          </select>
+        </div>
       </div>
 
-      {userRank > 0 && (
+      {userRank > 0 && selectedYear === 'all' && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <TrendingUp className="w-6 h-6 text-blue-600" />
               <div>
-                <p className="font-medium text-blue-900">Your Rank</p>
+                <p className="font-medium text-blue-900">Your Global Rank</p>
                 <p className="text-2xl font-bold text-blue-600">#{userRank}</p>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-sm text-blue-900">Total Profit</p>
+              <p className="text-sm text-blue-900">Total Growth</p>
               <p className={`text-xl font-bold ${
-                leaderboard[userRank - 1].profit >= 0 ? 'text-green-600' : 'text-red-600'
+                leaderboard[userRank - 1]?.profit >= 0 ? 'text-green-600' : 'text-red-600'
               }`}>
-                {leaderboard[userRank - 1].profit >= 0 ? '+' : ''}
-                {leaderboard[userRank - 1].profit.toFixed(2)} JC
+                {leaderboard[userRank - 1]?.profit >= 0 ? '+' : ''}
+                {leaderboard[userRank - 1]?.profit.toFixed(2)} JC
               </p>
             </div>
           </div>
@@ -89,27 +110,13 @@ export const Leaderboard = () => {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Rank
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Trader Name
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Account
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Portfolio Value
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Total Wealth
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Profit/Loss
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Return %
-                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Rank</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Analyst Name</th>
+                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">Batch</th>
+                <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Portfolio Value</th>
+                <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Total Score</th>
+                <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Growth</th>
+                <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Return %</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -118,10 +125,7 @@ export const Leaderboard = () => {
                 const isCurrentUser = entry.userId === user?.id;
 
                 return (
-                  <tr
-                    key={entry.userId}
-                    className={`${isCurrentUser ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
-                  >
+                  <tr key={entry.userId} className={`${isCurrentUser ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
                         {getMedalIcon(rank)}
@@ -129,47 +133,36 @@ export const Leaderboard = () => {
                       </div>
                     </td>
                     
-                    {/* Trader Name Column with Fallback */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
-                        <span className="font-bold text-gray-900">
-                          {entry.name || 'Unknown Trader'}
-                        </span>
+                        <span className="font-bold text-gray-900">{entry.name || 'Unknown Analyst'}</span>
                         {isCurrentUser && (
-                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
-                            You
-                          </span>
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">You</span>
                         )}
                       </div>
                     </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-500">{entry.email}</span>
+                    {/* NEW: Batch Column */}
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold border border-gray-200">
+                        {entry.batch}
+                      </span>
                     </td>
 
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span className="text-gray-900 font-medium">
-                        {entry.portfolioValue.toFixed(2)} JC
-                      </span>
+                    <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-gray-900">
+                      {entry.portfolioValue.toFixed(2)} JC
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-gray-900">
+                      {entry.totalWealth.toFixed(2)} JC
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span className="text-gray-900 font-bold">
-                        {entry.totalWealth.toFixed(2)} JC
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span className={`font-bold ${
-                        entry.profit >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
+                      <span className={`font-bold ${entry.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {entry.profit >= 0 ? '+' : ''}{entry.profit.toFixed(2)} JC
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span className={`font-bold ${
-                        parseFloat(entry.profitPercentage) >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {parseFloat(entry.profitPercentage) >= 0 ? '+' : ''}
-                        {entry.profitPercentage}%
+                      <span className={`font-bold ${parseFloat(entry.profitPercentage) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {parseFloat(entry.profitPercentage) >= 0 ? '+' : ''}{entry.profitPercentage}%
                       </span>
                     </td>
                   </tr>
@@ -183,8 +176,7 @@ export const Leaderboard = () => {
       {leaderboard.length === 0 && (
         <div className="text-center py-12 text-gray-500">
           <Trophy className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <p>No traders yet</p>
-          <p className="text-sm">Be the first to start trading!</p>
+          <p>No analysts found for this batch.</p>
         </div>
       )}
     </div>
