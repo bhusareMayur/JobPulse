@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './components/Auth/Login';
 import { Signup } from './components/Auth/Signup';
 import { Navbar } from './components/Layout/Navbar';
+import { Footer } from './components/Layout/Footer'; // <-- Import the new Footer
 import { Dashboard } from './pages/Dashboard';
 import { SkillDetail } from './pages/SkillDetail';
 import { Wallet } from './pages/Wallet';
@@ -49,16 +50,25 @@ function AppRoutes() {
   // ---------------------------------------------------------
   if (!user) {
     return (
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        
-        {/* We pass a navigate function to onToggle so your existing components can switch paths */}
-        <Route path="/login" element={<Login onToggle={() => navigate('/signup')} />} />
-        <Route path="/signup" element={<Signup onToggle={() => navigate('/login')} />} />
-        
-        {/* Catch-all: Redirect any unknown URLs to the landing page */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      // Added flex and flex-col layout for public routes
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        {/* Main content area expands to push footer down */}
+        <main className="flex-grow">
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            
+            {/* We pass a navigate function to onToggle so your existing components can switch paths */}
+            <Route path="/login" element={<Login onToggle={() => navigate('/signup')} />} />
+            <Route path="/signup" element={<Signup onToggle={() => navigate('/login')} />} />
+            
+            {/* Catch-all: Redirect any unknown URLs to the landing page */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+
+        {/* Inserted the Footer component here for public pages */}
+        <Footer />
+      </div>
     );
   }
 
@@ -66,9 +76,12 @@ function AppRoutes() {
   // PROTECTED ROUTES (Authenticated Users)
   // ---------------------------------------------------------
   return (
-    <div className="min-h-screen bg-gray-50">
+    // Added flex and flex-col to enable the sticky footer
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <Navbar />
-      <main>
+      
+      {/* Added flex-grow so the main content pushes the footer down */}
+      <main className="flex-grow">
         <Routes>
           {/* Dashboard takes over the root URL once logged in */}
           <Route path="/" element={<Dashboard onNavigateToSkill={handleNavigateToSkill} />} />
@@ -81,6 +94,9 @@ function AppRoutes() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+
+      {/* Inserted the Footer component here for protected pages */}
+      <Footer />
     </div>
   );
 }
