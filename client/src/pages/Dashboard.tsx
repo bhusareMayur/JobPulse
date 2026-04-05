@@ -90,9 +90,12 @@ export const Dashboard = ({ onNavigateToSkill }: DashboardProps) => {
         </div>
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-        <p className="text-sm text-blue-900">
+     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <p className="text-sm text-blue-900 mb-2">
           <strong>How it works:</strong> Buy skills you expect to grow. Prices fluctuate based on <strong>real-world job market trends</strong> and trader activity. Sell when you've made a profit!
+        </p>
+        <p className="text-xs text-blue-800 font-medium bg-blue-100 inline-block px-2 py-1 rounded">
+          💡 Note: All prices are in JC (JobCoins), our virtual trading currency.
         </p>
       </div>
 
