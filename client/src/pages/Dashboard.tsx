@@ -70,7 +70,7 @@ export const Dashboard = ({ onNavigateToSkill }: DashboardProps) => {
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
         <p className="text-sm text-blue-900">
-          <strong>How it works:</strong> Buy skills you think will be in demand. As more people buy, prices rise. Sell when you've made a profit!
+          <strong>How it works:</strong> Buy skills you expect to grow. Prices fluctuate based on <strong>real-world job market trends</strong> and trader activity. Sell when you've made a profit!
         </p>
       </div>
 
