@@ -7,8 +7,8 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
-  // 1. Updated interface to require graduationYear
-  signUp: (email: string, password: string, name: string, graduationYear: number, referralCode?: string) => Promise<{ error: Error | null }>;
+  // Added department to the interface
+  signUp: (email: string, password: string, name: string, graduationYear: number, department: string, referralCode?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -73,8 +73,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 2. Accept graduationYear as a parameter
-  const signUp = async (email: string, password: string, name: string, graduationYear: number, referralCode?: string) => {
+  // Added department parameter and passed it to Supabase metadata
+  const signUp = async (email: string, password: string, name: string, graduationYear: number, department: string, referralCode?: string) => {
     try {
       const { error } = await supabase.auth.signUp({
         email,
@@ -82,7 +82,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         options: {
           data: {
             full_name: name, 
-            graduation_year: graduationYear, // 3. Pass to Supabase auth metadata
+            graduation_year: graduationYear, 
+            department: department, // Saved properly now
             referred_by: referralCode || null,
           },
         },

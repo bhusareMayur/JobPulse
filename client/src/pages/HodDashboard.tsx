@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, 
   BarChart, Bar, XAxis, YAxis, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, CartesianGrid
 } from 'recharts';
-import { Lock, TrendingUp, Users, Activity, Download, Lightbulb, CheckCircle, Info, X, Trophy, Mail, BarChart3, LogOut } from 'lucide-react';
+import { Lock, TrendingUp, Users, Activity, Download, Lightbulb, CheckCircle, Info, X, Trophy, Mail, BarChart3, LogOut, RefreshCw } from 'lucide-react';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316'];
 
@@ -14,11 +14,15 @@ export const HodDashboard = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true); // Prevents login screen flash on refresh
+  const [syncing, setSyncing] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState('');
   const [showReadinessModal, setShowReadinessModal] = useState(false);
 
-  // 1. Check for existing session on page load (Refresh Fix)
+  // Use a ref to keep track of the latest credentials for the interval
+  const credentialsRef = useRef({ role, department, password });
+
+  // 1. Initial Load & Session check
   useEffect(() => {
     const savedSession = sessionStorage.getItem('admin_session');
     if (savedSession) {
@@ -26,21 +30,51 @@ export const HodDashboard = () => {
       setRole(savedRole);
       setDepartment(savedDept);
       setPassword(savedPass);
-      fetchDashboardData(savedRole, savedDept, savedPass);
+      credentialsRef.current = { role: savedRole, department: savedDept, password: savedPass };
+      fetchDashboardData(savedRole, savedDept, savedPass, false);
     } else {
       setInitialLoad(false);
     }
   }, []);
 
-  // 2. Centralized fetch function for both login and auto-refresh
-  const fetchDashboardData = async (currentRole: string, currentDept: string, currentPass: string) => {
-    setLoading(true);
+  // Update refs when state changes
+  useEffect(() => {
+    credentialsRef.current = { role, department, password };
+  }, [role, department, password]);
+
+  // 2. SMART POLLING (The Guaranteed Fix)
+  // This safely fetches data every 5 seconds, but ONLY if the tab is active
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const intervalId = setInterval(() => {
+      // Only run the silent update if the browser tab is actually visible to the user
+      if (document.visibilityState === 'visible') {
+        const { role: r, department: d, password: p } = credentialsRef.current;
+        fetchDashboardData(r, d, p, true);
+      }
+    }, 5000); // 5 seconds
+
+    return () => clearInterval(intervalId);
+  }, [isAuthenticated]);
+
+  const fetchDashboardData = async (currentRole: string, currentDept: string, currentPass: string, isSilent = false) => {
+    if (!isSilent) setLoading(true);
+    setSyncing(true);
     setError('');
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/analytics/hod?role=${currentRole}&department=${currentDept}&pass=${currentPass}`);
+      const timestamp = new Date().getTime(); // Bust browser cache
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/analytics/hod?role=${currentRole}&department=${currentDept}&pass=${currentPass}&_t=${timestamp}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
       if (!res.ok) {
-        sessionStorage.removeItem('admin_session'); // Clear bad credentials
+        sessionStorage.removeItem('admin_session'); 
         if (res.status === 401) throw new Error('Incorrect Admin Password');
         throw new Error('Server Error');
       }
@@ -49,7 +83,6 @@ export const HodDashboard = () => {
       setData(json);
       setIsAuthenticated(true);
       
-      // Save valid session to survive refreshes
       sessionStorage.setItem('admin_session', JSON.stringify({ 
         savedRole: currentRole, 
         savedDept: currentDept, 
@@ -57,19 +90,19 @@ export const HodDashboard = () => {
       }));
     } catch (err: any) {
       setError(err.message);
-      setIsAuthenticated(false);
+      if (!isSilent) setIsAuthenticated(false);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
+      setTimeout(() => setSyncing(false), 500); 
       setInitialLoad(false);
     }
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchDashboardData(role, department, password);
+    fetchDashboardData(role, department, password, false);
   };
 
-  // 3. Secure Logout Handler
   const handleLogout = () => {
     sessionStorage.removeItem('admin_session');
     setIsAuthenticated(false);
@@ -77,9 +110,12 @@ export const HodDashboard = () => {
     setPassword('');
   };
 
+  const handleRefresh = () => {
+    fetchDashboardData(role, department, password, false);
+  };
+
   const handlePrint = () => window.print();
 
-  // Show a blank loading screen briefly if we are checking session storage
   if (initialLoad) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -152,7 +188,6 @@ export const HodDashboard = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-12 print:bg-white print:py-0">
       
-      {/* Readiness Information Modal */}
       {showReadinessModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 print:hidden">
           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 relative animate-in fade-in zoom-in duration-200">
@@ -187,20 +222,32 @@ export const HodDashboard = () => {
             <span className="bg-slate-800 text-white px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase mb-3 inline-block">
               {role === 'tpo' ? 'Master TPO View' : `${department} Directorate View`}
             </span>
-            <h1 className="text-3xl font-extrabold text-slate-900 mt-1">
-              {role === 'tpo' ? 'Global Placement Intelligence' : `${department} Skill Intelligence`}
-            </h1>
+            <div className="flex items-center space-x-3">
+              <h1 className="text-3xl font-extrabold text-slate-900 mt-1">
+                {role === 'tpo' ? 'Global Placement Intelligence' : `${department} Skill Intelligence`}
+              </h1>
+              {syncing && <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse mt-2" title="Live Sync Active"></div>}
+            </div>
             <p className="text-slate-600 mt-1">Live simulation data mapping student interests against global hiring trends.</p>
           </div>
           
-          <div className="flex items-center space-x-3 mt-4 md:mt-0">
+          <div className="flex flex-wrap items-center gap-3 mt-4 md:mt-0">
+            <button 
+              onClick={handleRefresh} 
+              disabled={loading || syncing}
+              className="flex items-center space-x-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-5 py-2.5 rounded-xl font-medium shadow-sm transition-colors"
+            >
+              <RefreshCw className={`w-5 h-5 ${loading || syncing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{(loading || syncing) ? 'Syncing...' : 'Force Sync'}</span>
+            </button>
+
             <button onClick={handlePrint} className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium shadow-sm transition-colors">
               <Download className="w-5 h-5" />
-              <span>Export PDF</span>
+              <span className="hidden sm:inline">Export</span>
             </button>
             <button onClick={handleLogout} className="flex items-center space-x-2 bg-white border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-700 px-5 py-2.5 rounded-xl font-medium shadow-sm transition-colors">
               <LogOut className="w-5 h-5" />
-              <span>Logout</span>
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </div>

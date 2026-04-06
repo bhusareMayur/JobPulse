@@ -14,16 +14,22 @@ export const Signup = ({ onToggle }: SignupProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [department, setDepartment] = useState('Computer Science');
+  const [department, setDepartment] = useState('CS'); // Default to exact code
   const [graduationYear, setGraduationYear] = useState('2026');
   
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  // Mapped exact dashboard codes to display names
   const departments = [
-    'Computer Science', 'Information Technology', 'Data Science', 
-    'Electronics & Telecommunication', 'Mechanical', 'Civil', 'Other'
+    { value: 'CS', label: 'Computer Science (CS)' },
+    { value: 'IT', label: 'Information Technology (IT)' },
+    { value: 'CSBS', label: 'CS & Business Systems (CSBS)' },
+    { value: 'ENTC', label: 'Electronics (ENTC)' },
+    { value: 'MECH', label: 'Mechanical' },
+    { value: 'CIVIL', label: 'Civil' },
+    { value: 'OTHER', label: 'Other' }
   ];
   
   const years = ['2024', '2025', '2026', '2027', '2028', '2029'];
@@ -47,7 +53,7 @@ export const Signup = ({ onToggle }: SignupProps) => {
         options: {
           data: {
             full_name: name.trim(),
-            department: department,
+            department: department, // Now passes 'CS' instead of 'Computer Science'
             graduation_year: parseInt(graduationYear),
           }
         }
@@ -171,7 +177,7 @@ export const Signup = ({ onToggle }: SignupProps) => {
                   onChange={(e) => setDepartment(e.target.value)}
                   className="pl-11 pr-4 py-3.5 w-full bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-medium text-slate-700 appearance-none"
                 >
-                  {departments.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+                  {departments.map(dept => <option key={dept.value} value={dept.value}>{dept.label}</option>)}
                 </select>
               </div>
 

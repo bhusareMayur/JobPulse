@@ -5,6 +5,11 @@ import { supabase } from '../config/supabase.js';
 const router = express.Router();
 
 router.get('/hod', async (req, res) => {
+  // CRITICAL FIX: Prevent all CDN, Edge, and Browser Caching
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   const { pass, role = 'hod', department = 'CS' } = req.query;
   
   // 1. Role-Based Authentication
@@ -13,7 +18,6 @@ router.get('/hod', async (req, res) => {
       return res.status(401).json({ error: 'Incorrect TPO Password' });
     }
   } else {
-    // Dynamically check department password (e.g., CS_HOD_PASSWORD)
     const expectedPass = process.env[`${department.toUpperCase()}_HOD_PASSWORD`];
     if (!expectedPass || pass !== expectedPass) {
       return res.status(401).json({ error: `Incorrect Password for ${department} HOD` });
@@ -43,9 +47,7 @@ router.get('/hod', async (req, res) => {
       userMap[p.id] = { dept: p.department || 'Unassigned', name: p.full_name || 'Anonymous Student' };
     });
 
-    // ==========================================
     // 5. Cross-Department Comparison (Available to EVERYONE)
-    // ==========================================
     const deptCounts = {};
     allTracked?.forEach(t => {
       const dept = userMap[t.user_id]?.dept || 'Unassigned';
@@ -57,14 +59,11 @@ router.get('/hod', async (req, res) => {
       engagements: deptCounts[dept]
     }));
 
-    // ==========================================
     // 6. Filter Data for specific HOD scope
-    // ==========================================
     let relevantProfiles = allProfiles;
     let relevantTracked = allTracked;
 
     if (role === 'hod') {
-      // Isolate to just this department
       relevantProfiles = allProfiles.filter(p => p.department === department);
       const validUserIds = new Set(relevantProfiles.map(p => p.id));
       relevantTracked = allTracked.filter(t => validUserIds.has(t.user_id));
@@ -72,9 +71,7 @@ router.get('/hod', async (req, res) => {
 
     const totalActiveStudents = relevantProfiles.length;
 
-    // ==========================================
     // 7. Aggregate HOD-specific metrics
-    // ==========================================
     const distribution = {};
     relevantTracked?.forEach(t => {
       if (!distribution[t.skill_id]) distribution[t.skill_id] = 0;
@@ -121,7 +118,7 @@ router.get('/hod', async (req, res) => {
     
     let insight = `Students are highly focused on ${topStudentSkill}. `;
     if (readinessScore === 0) {
-      insight = `Waiting for student engagement. Students in your department have not started tracking skills yet.`;
+      insight = `Waiting for student engagement. Students in your scope have not started tracking skills yet.`;
     } else if (readinessScore < 70) {
       insight += `CRITICAL: The Placement Readiness Score is critically low (${readinessScore}/100). Students are prioritizing skills the market is not demanding. Urgent curriculum review required.`;
     } else if (topStudentSkill !== topMarketSkill) {
@@ -130,9 +127,7 @@ router.get('/hod', async (req, res) => {
       insight += `This aligns perfectly with current market demand! The curriculum is highly effective.`;
     }
 
-    // ==========================================
     // 10. GENERATE TOP TALENT WATCHLIST 
-    // ==========================================
     const userStats = {};
     relevantTracked?.forEach(t => {
       if (!userStats[t.user_id]) {
@@ -148,14 +143,13 @@ router.get('/hod', async (req, res) => {
       }
     });
 
-    // Map into array, calculate score points, and rank
     const topAnalysts = Object.keys(userStats)
       .map(userId => ({
         id: userId,
         name: userMap[userId]?.name || 'Active Student',
-        email: 'student@institute.edu', // Protected identity fallback
+        email: 'student@institute.edu', 
         topSkill: userStats[userId].topSkillName,
-        wealth: Math.round(userStats[userId].totalScore * 10), // Acts as "Skill Points"
+        wealth: Math.round(userStats[userId].totalScore * 10), 
       }))
       .sort((a, b) => b.wealth - a.wealth)
       .slice(0, 5)
@@ -176,6 +170,36 @@ router.get('/hod', async (req, res) => {
   }
 });
 
-// Leave /batch-trends route exactly as it is...
+router.get('/batch-trends', async (req, res) => {
+  try {
+    const targetYear = req.query.year || 2026;
+    const { data: profiles, error: profileErr } = await supabase.from('profiles').select('id').eq('graduation_year', targetYear);
+    if (profileErr) throw profileErr;
+    
+    const userIds = profiles.map(p => p.id);
+    if (userIds.length === 0) return res.json([]);
+
+    const { data: tracked, error: trackedErr } = await supabase
+      .from('tracked_skills')
+      .select('skill_id, skills(name, demand_score)')
+      .in('user_id', userIds);
+    if (trackedErr) throw trackedErr;
+
+    const skillCounts = {};
+    if (tracked) {
+      tracked.forEach(t => {
+        if (!skillCounts[t.skill_id]) {
+          skillCounts[t.skill_id] = { id: t.skill_id, name: t.skills.name, score: t.skills.demand_score, volumeHeld: 0 };
+        }
+        skillCounts[t.skill_id].volumeHeld += 1;
+      });
+    }
+
+    const topSkills = Object.values(skillCounts).sort((a, b) => b.volumeHeld - a.volumeHeld).slice(0, 3);
+    res.json(topSkills);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 export default router;
