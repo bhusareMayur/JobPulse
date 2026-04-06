@@ -22,6 +22,10 @@ export const SkillDetail = ({ skillId, onBack }: { skillId: string, onBack: () =
   const [isTracked, setIsTracked] = useState(false);
   const [trackingStatus, setTrackingStatus] = useState<TrackStatus>('interested');
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // New Prediction States
+  const [prediction, setPrediction] = useState<any>(null);
+  const [predicting, setPredicting] = useState(false);
   
   const { user } = useAuth();
   const currentHour = new Date().getHours();
@@ -59,6 +63,30 @@ export const SkillDetail = ({ skillId, onBack }: { skillId: string, onBack: () =
     fetchSkillData();
     fetchTrackingData();
   }, [skillId, timeframe, fetchTrackingData]);
+
+  // Fetch AI Prediction Data
+  useEffect(() => {
+    const fetchPrediction = async () => {
+      if (!user?.id) return;
+      setPredicting(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/skills/${skillId}/predict`, {
+          headers: { 'Authorization': `Bearer ${session?.access_token}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+          setPrediction(data.prediction);
+        }
+      } catch (err) {
+        console.error("Failed to fetch prediction", err);
+      } finally {
+        setPredicting(false);
+      }
+    };
+
+    fetchPrediction();
+  }, [skillId, user?.id]);
 
   const fetchSkillData = async () => {
     setFetchError(null);
@@ -346,6 +374,60 @@ export const SkillDetail = ({ skillId, onBack }: { skillId: string, onBack: () =
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* 🔮 NEW: AI Scope Predictor Card */}
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-3xl shadow-sm border border-purple-100 p-7 relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 bg-purple-200 rounded-full blur-3xl opacity-50"></div>
+            
+            <h2 className="text-xl font-bold mb-6 flex items-center text-slate-800 tracking-tight relative z-10">
+              <BrainCircuit className="w-5 h-5 mr-2.5 text-purple-600" /> Future Scope Predictor
+            </h2>
+
+            {predicting ? (
+              <div className="flex flex-col items-center justify-center py-6">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mb-2"></div>
+                <p className="text-xs font-bold text-slate-400">Analyzing historical data...</p>
+              </div>
+            ) : prediction ? (
+              <div className="space-y-4 relative z-10">
+                <div className="bg-white rounded-2xl p-5 border border-purple-100 shadow-sm">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">30-Day Projected Score</p>
+                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
+                      prediction.trend === 'surging' ? 'bg-emerald-100 text-emerald-700' :
+                      prediction.trend === 'declining' ? 'bg-rose-100 text-rose-700' :
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {prediction.trend}
+                    </span>
+                  </div>
+                  <div className="flex items-end space-x-3">
+                    <p className="text-3xl font-black tracking-tight text-slate-800">{prediction.projectedScore}</p>
+                    {prediction.trend === 'surging' && <TrendingUp className="w-6 h-6 text-emerald-500 mb-1" />}
+                    {prediction.trend === 'declining' && <TrendingDown className="w-6 h-6 text-rose-500 mb-1" />}
+                  </div>
+                </div>
+
+                <div className="bg-white/60 rounded-xl p-4 border border-purple-100/50">
+                  <div className="flex justify-between items-center text-xs font-bold">
+                    <span className="text-slate-500">Algorithm Confidence:</span>
+                    <span className={`px-2 py-1 rounded ${
+                      prediction.confidence === 'High' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {prediction.confidence}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-3 font-medium leading-relaxed">
+                    Based on the last {prediction.confidence === 'High' ? '30+' : 'few'} market cycles and today's volume of {prediction.currentJobs.toLocaleString()} open positions.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-sm text-slate-500 font-medium border border-dashed border-purple-200 rounded-2xl bg-white/50">
+                Insufficient data to generate prediction.
+              </div>
+            )}
           </div>
 
           {/* 🔥 ENHANCED ACTION PLAN CARD */}

@@ -100,4 +100,108 @@ router.get('/next-step', authenticateUser, async (req, res) => {
   }
 });
 
+
+
+router.get('/:id/predict', authenticateUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Fetch current skill data (Grab ALL columns to avoid missing column crashes)
+    const { data: skill, error: skillError } = await supabase
+      .from('skills')
+      .select('*') 
+      .eq('id', id)
+      .single();
+
+    if (skillError) throw skillError;
+
+    // Safely support both your old schema (current_price) and new schema (demand_score)
+    const currentScore = skill.demand_score || skill.current_price || 0;
+    const currentJobs = skill.current_job_listings || 0;
+
+    // 2. Fetch historical data (Safely check 'demand_history', fallback to 'price_history')
+    let history = [];
+    const { data: demandHistory, error: dhError } = await supabase
+      .from('demand_history')
+      .select('*')
+      .eq('skill_id', id)
+      .order('created_at', { ascending: true })
+      .limit(30);
+
+    if (!dhError && demandHistory && demandHistory.length > 0) {
+      history = demandHistory;
+    } else {
+      // Fallback if demand_history doesn't exist yet
+      const { data: priceHistory, error: phError } = await supabase
+        .from('price_history')
+        .select('*')
+        .eq('skill_id', id)
+        .order('created_at', { ascending: true })
+        .limit(30);
+      
+      if (!phError && priceHistory) {
+        history = priceHistory;
+      }
+    }
+
+    // 3. Simple Linear Regression Algorithm to predict future scope
+    let projectedPrice = currentScore;
+    let trend = 'stable';
+    let confidence = 'Low'; 
+
+    if (history && history.length > 2) {
+      confidence = history.length > 15 ? 'High' : 'Medium';
+      
+      const n = history.length;
+      let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+
+      history.forEach((point, index) => {
+        // Safely extract the score regardless of the column name used in the DB
+        const pointScore = point.score || point.price || point.demand_score || 0;
+        sumX += index;
+        sumY += Number(pointScore);
+        sumXY += index * Number(pointScore);
+        sumXX += index * index;
+      });
+
+      // Calculate slope (m)
+      const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+      
+      // Project 7 steps into the future
+      const futureIndex = n + 7;
+      
+      // Calculate Y-intercept (b)
+      const intercept = (sumY - slope * sumX) / n;
+      
+      projectedPrice = (slope * futureIndex) + intercept;
+
+      // Determine textual trend
+      if (slope > 0.05) trend = 'surging';
+      else if (slope < -0.05) trend = 'declining';
+      else trend = 'stable';
+    }
+
+    // 4. Incorporate today's job posting volume as a multiplier
+    const jobVolumeMultiplier = currentJobs > 10000 ? 1.05 : 1.0;
+    projectedPrice = Math.max(1, projectedPrice * jobVolumeMultiplier); 
+
+    // Fail-safe: If math results in NaN (e.g. corrupted data), default to current score
+    if (isNaN(projectedPrice)) projectedPrice = currentScore;
+
+    // Send successful payload to frontend
+    res.json({
+      success: true,
+      prediction: {
+        projectedScore: projectedPrice.toFixed(2),
+        trend: trend,
+        confidence: confidence,
+        currentJobs: currentJobs
+      }
+    });
+
+  } catch (error) {
+    console.error("Prediction API Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 export default router;
