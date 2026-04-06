@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { TrendingUp, graduationCap } from 'lucide-react'; // Added icons for branding
+import { TrendingUp, Mail, Lock, ArrowRight, Loader2, Sparkles } from 'lucide-react';
 
 interface LoginProps {
   onToggle: () => void;
@@ -29,85 +29,105 @@ export const Login = ({ onToggle }: LoginProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md border border-slate-100">
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="bg-blue-600 p-3 rounded-xl shadow-lg shadow-blue-200">
-              <TrendingUp className="h-8 w-8 text-white" />
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
+      <div className="max-w-md w-full bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-100 overflow-hidden relative">
+        
+        {/* Soft Background Glows */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-60 -z-10"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-50 rounded-full blur-3xl opacity-60 -z-10"></div>
+
+        <div className="p-8 sm:p-10">
+          
+          {/* Header Section */}
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm border border-indigo-100">
+              <TrendingUp className="w-8 h-8" />
             </div>
-          </div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">JobPulse</h1>
-          <p className="text-slate-600 font-medium italic">Career Intelligence Simulator</p>
-        </div>
-
-        <div className="bg-indigo-50 rounded-xl p-4 mb-6 border border-indigo-100">
-          <p className="text-xs text-indigo-700 text-center leading-relaxed">
-            Analyze market trends, follow placement batch data, and build your industry readiness score.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">
-              Student Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all"
-              placeholder="Enter your college email"
-              required
-            />
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Welcome Back</h1>
+            <p className="text-slate-500 font-medium text-sm">Resume your career readiness tracking.</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all"
-              placeholder="••••••••"
-              required
-            />
+          {/* Educational Value Prop Box */}
+          <div className="bg-indigo-50/50 rounded-2xl p-4 mb-8 border border-indigo-100/50 flex items-start space-x-3 shadow-inner">
+            <Sparkles className="w-5 h-5 text-indigo-500 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-indigo-700 font-medium leading-relaxed">
+              Analyze market trends, follow placement batch data, and build your industry readiness score.
+            </p>
           </div>
 
+          {/* Error Message */}
           {error && (
-            <div className="bg-red-50 text-red-700 px-4 py-3 rounded-xl text-sm font-medium border border-red-100 animate-shake">
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-sm font-bold text-center flex items-center justify-center animate-in fade-in zoom-in duration-300">
               {error}
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 disabled:opacity-50 flex items-center justify-center space-x-2"
-          >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white"></div>
-                <span>Verifying Credentials...</span>
-              </>
-            ) : (
-              <span>Sign In to Simulation</span>
-            )}
-          </button>
-        </form>
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            
+            {/* Email Input */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Mail className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                type="email"
+                required
+                placeholder="College Email Address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="pl-12 pr-4 py-3.5 w-full bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-medium text-slate-700 placeholder-slate-400"
+              />
+            </div>
 
-        <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-          <p className="text-slate-600 text-sm">
-            New to the simulation lab?{' '}
-            <button 
-              onClick={onToggle} 
-              className="text-blue-600 font-bold hover:text-blue-700 transition-colors underline underline-offset-4"
+            {/* Password Input */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Lock className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                type="password"
+                required
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pl-12 pr-4 py-3.5 w-full bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-medium text-slate-700 placeholder-slate-400"
+              />
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center space-x-2 disabled:opacity-70 disabled:hover:translate-y-0 mt-4"
             >
-              Create Account
+              {loading ? (
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Verifying...</span>
+                </div>
+              ) : (
+                <>
+                  <span>Sign In to Lab</span>
+                  <ArrowRight className="w-5 h-5" />
+                </>
+              )}
             </button>
-          </p>
+          </form>
+
+          {/* Footer Toggle */}
+          <div className="mt-8 text-center pt-6 border-t border-slate-100">
+            <p className="text-slate-500 font-medium">
+              New to the simulation lab?{' '}
+              <button 
+                onClick={onToggle}
+                className="text-indigo-600 font-bold hover:text-indigo-700 transition-colors"
+              >
+                Create Account
+              </button>
+            </p>
+          </div>
+          
         </div>
       </div>
     </div>

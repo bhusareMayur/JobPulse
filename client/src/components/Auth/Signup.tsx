@@ -1,5 +1,9 @@
 import { useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { 
+  Mail, Lock, User, ArrowRight, Loader2, 
+  Building2, GraduationCap, CheckCircle
+} from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 interface SignupProps {
   onToggle: () => void;
@@ -10,61 +14,88 @@ export const Signup = ({ onToggle }: SignupProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [graduationYear, setGraduationYear] = useState('2026'); // NEW: Default to seniors
-  const [referralCode, setReferralCode] = useState('');
+  const [department, setDepartment] = useState('Computer Science');
+  const [graduationYear, setGraduationYear] = useState('2026');
   
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const { signUp } = useAuth();
+
+  const departments = [
+    'Computer Science', 'Information Technology', 'Data Science', 
+    'Electronics & Telecommunication', 'Mechanical', 'Civil', 'Other'
+  ];
+  
+  const years = ['2024', '2025', '2026', '2027', '2028', '2029'];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess(false);
 
-    if (!name.trim()) {
-      setError('Full Name is required');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
+    if (!name.trim()) return setError('Full Name is required');
+    if (password !== confirmPassword) return setError('Passwords do not match');
+    if (password.length < 6) return setError('Password must be at least 6 characters');
 
     setLoading(true);
 
-    // Pass the parsed graduationYear to the Auth Context
-    const { error } = await signUp(email, password, name.trim(), parseInt(graduationYear), referralCode || undefined);
-    
-    if (error) {
-      setError(error.message);
-    } else {
+    try {
+      // 1. Sign up the user via Supabase Auth
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name.trim(),
+            department: department,
+            graduation_year: parseInt(graduationYear),
+          }
+        }
+      });
+
+      if (signUpError) throw signUpError;
+
+      // 2. Ensure the Profile is populated with the educational data
+      if (data?.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: data.user.id,
+            full_name: name.trim(),
+            department: department,
+            graduation_year: parseInt(graduationYear),
+          }, { onConflict: 'id' });
+          
+        if (profileError) {
+          console.warn('Profile sync warning:', profileError);
+        }
+      }
+
       setSuccess(true);
+    } catch (err: any) {
+      setError(err.message || 'An error occurred during sign up.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
+  // SUCCESS STATE UI
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md text-center">
-          <div className="text-green-600 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+      <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-100 p-10 text-center relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-50 rounded-full blur-3xl opacity-60 -z-10"></div>
+          
+          <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-emerald-100">
+            <CheckCircle className="w-10 h-10" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Account Created!</h2>
-          <p className="text-gray-600 mb-6">You've been credited with 10,000 JC to build your portfolio.</p>
+          <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-3">Account Created!</h2>
+          <p className="text-slate-500 font-medium mb-8 leading-relaxed">
+            Welcome to JobPulse. Your readiness portfolio is initialized and ready to track market demands.
+          </p>
           <button
             onClick={onToggle}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-md hover:shadow-lg hover:-translate-y-0.5"
           >
             Go to Login
           </button>
@@ -73,124 +104,147 @@ export const Signup = ({ onToggle }: SignupProps) => {
     );
   }
 
+  // SIGNUP FORM UI
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Join JobPulse</h1>
-          <p className="text-gray-600">Start with 10,000 JC</p>
-        </div>
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
+      <div className="max-w-md w-full bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-100 overflow-hidden relative">
+        
+        {/* Soft Background Glows */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-60 -z-10"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-50 rounded-full blur-3xl opacity-60 -z-10"></div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Full Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g. Mayur Bhusare"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-            />
-          </div>
-
-          {/* --- NEW: Graduation Batch Dropdown --- */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Graduation Batch <span className="text-red-500">*</span>
-            </label>
-            <select 
-              required
-              value={graduationYear}
-              onChange={(e) => setGraduationYear(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
-            >
-              <option value="2026">2026 (4th Year / Placement Batch)</option>
-              <option value="2027">2027 (3rd Year)</option>
-              <option value="2028">2028 (2nd Year)</option>
-              <option value="2029">2029 (1st Year)</option>
-            </select>
-          </div>
-          {/* -------------------------------------- */}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-              minLength={6}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Confirm Password <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-              minLength={6}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Invite Code (Optional)
-            </label>
-            <input
-              type="text"
-              value={referralCode}
-              onChange={(e) => setReferralCode(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter invite code"
-            />
-            <p className="text-xs text-gray-500 mt-1">Get 500 JC bonus after your first simulation!</p>
+        <div className="p-8 sm:p-10">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm border border-indigo-100">
+              <GraduationCap className="w-8 h-8" />
+            </div>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Join Your Cohort</h1>
+            <p className="text-slate-500 font-medium text-sm">Create your readiness portfolio to track market demand.</p>
           </div>
 
           {error && (
-            <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-sm font-bold text-center flex items-center justify-center">
               {error}
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Creating account...' : 'Sign Up'}
-          </button>
-        </form>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            
+            {/* Full Name */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <User className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                type="text"
+                required
+                placeholder="Full Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="pl-12 pr-4 py-3.5 w-full bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-medium text-slate-700 placeholder-slate-400"
+              />
+            </div>
 
-        <p className="text-center text-gray-600 mt-6">
-          Already have an account?{' '}
-          <button onClick={onToggle} className="text-blue-600 font-medium hover:underline">
-            Login
-          </button>
-        </p>
+            {/* Email */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Mail className="h-5 w-5 text-slate-400" />
+              </div>
+              <input
+                type="email"
+                required
+                placeholder="College Email Address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="pl-12 pr-4 py-3.5 w-full bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-medium text-slate-700 placeholder-slate-400"
+              />
+            </div>
+
+            {/* Department & Year (Side by Side) */}
+            <div className="flex space-x-3">
+              <div className="relative w-2/3">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Building2 className="h-5 w-5 text-slate-400" />
+                </div>
+                <select
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  className="pl-11 pr-4 py-3.5 w-full bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-medium text-slate-700 appearance-none"
+                >
+                  {departments.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+                </select>
+              </div>
+
+              <div className="relative w-1/3">
+                <select
+                  value={graduationYear}
+                  onChange={(e) => setGraduationYear(e.target.value)}
+                  className="px-4 py-3.5 w-full bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-bold text-indigo-600 appearance-none text-center"
+                >
+                  {years.map(year => <option key={year} value={year}>{year}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Passwords (Side by Side on Desktop, Stacked on Mobile) */}
+            <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-3">
+              <div className="relative w-full">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-slate-400" />
+                </div>
+                <input
+                  type="password"
+                  required
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={6}
+                  className="pl-11 pr-4 py-3.5 w-full bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-medium text-slate-700 placeholder-slate-400"
+                />
+              </div>
+
+              <div className="relative w-full">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-slate-400" />
+                </div>
+                <input
+                  type="password"
+                  required
+                  placeholder="Confirm"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  minLength={6}
+                  className="pl-11 pr-4 py-3.5 w-full bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-medium text-slate-700 placeholder-slate-400"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center space-x-2 disabled:opacity-70 disabled:hover:translate-y-0 mt-4"
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                <>
+                  <span>Create Account</span>
+                  <ArrowRight className="w-5 h-5" />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="mt-8 text-center pt-6 border-t border-slate-100">
+            <p className="text-slate-500 font-medium">
+              Already in a cohort?{' '}
+              <button 
+                onClick={onToggle}
+                className="text-indigo-600 font-bold hover:text-indigo-700 transition-colors"
+              >
+                Sign in here
+              </button>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

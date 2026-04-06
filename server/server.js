@@ -6,7 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Import Route Handlers
-import tradeRoutes from './routes/trade.js';
+import trackRoutes from './routes/track.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import skillsRoutes from './routes/skills.js';
 import roadmapRoutes from './routes/roadmap.js';
@@ -25,7 +25,7 @@ app.use(cors());
 app.use(express.json());
 
 // Mount Routes
-app.use('/api/trade', tradeRoutes);
+app.use('/api/track', trackRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/roadmap', roadmapRoutes);

@@ -1,218 +1,290 @@
 import { useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, TrendingUp, TrendingDown, Briefcase, Clock, BookOpen, Youtube, Map, ExternalLink } from 'lucide-react';
+import { 
+  ArrowLeft, TrendingUp, TrendingDown, Briefcase, Clock, 
+  BookOpen, Youtube, Map, ExternalLink, BookmarkPlus, 
+  BookmarkMinus, AlertCircle, Users, Activity, Flame,
+  Target, BrainCircuit, Crown, Sparkles, Code, Terminal, Rocket
+} from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { supabase, Skill, PriceHistory } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 
 type Timeframe = '1H' | '1D' | '1W' | 'ALL';
+type TrackStatus = 'interested' | 'learning' | 'mastered';
 
-interface SkillDetailProps {
-  skillId: string;
-  onBack: () => void;
-}
-
-interface ExtendedSkill extends Skill {
-  current_job_listings?: number;
-  external_demand_score?: number;
-}
-
-export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
-  const [skill, setSkill] = useState<ExtendedSkill | null>(null);
-  const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
+export const SkillDetail = ({ skillId, onBack }: { skillId: string, onBack: () => void }) => {
+  const [skill, setSkill] = useState<any>(null);
+  const [priceHistory, setPriceHistory] = useState<any[]>([]);
+  const [trackerCount, setTrackerCount] = useState<number>(0);
   const [timeframe, setTimeframe] = useState<Timeframe>('ALL');
   
-  const [quantity, setQuantity] = useState(1);
-  const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy');
-  const [successMsg, setSuccessMsg] = useState('');
+  const [isTracked, setIsTracked] = useState(false);
+  const [trackingStatus, setTrackingStatus] = useState<TrackStatus>('interested');
+  const [fetchError, setFetchError] = useState<string | null>(null);
   
-  const [userHolding, setUserHolding] = useState<number>(0);
-  
-  const { user, profile, refreshProfile } = useAuth();
-  const queryClient = useQueryClient();
-
-  // --- ACADEMIC MODE CHECK (TESTING 9 PM TO 9 AM) ---
+  const { user } = useAuth();
   const currentHour = new Date().getHours();
   const isMarketClosed = currentHour >= 21 || currentHour < 9; 
-  // ---------------------------
 
-  const fetchHoldingData = useCallback(async () => {
+  const fetchTrackingData = useCallback(async () => {
     if (!user?.id) return;
-    const { data } = await supabase
-      .from('holdings')
-      .select('quantity')
-      .eq('user_id', user.id)
-      .eq('skill_id', skillId)
-      .maybeSingle();
+    try {
+      const { data: userData } = await supabase
+        .from('tracked_skills')
+        .select('id, status')
+        .eq('user_id', user.id)
+        .eq('skill_id', skillId)
+        .maybeSingle();
 
-    setUserHolding(data?.quantity || 0);
+      if (userData) {
+        setIsTracked(true);
+        setTrackingStatus(userData.status as TrackStatus);
+      } else {
+        setIsTracked(false);
+      }
+
+      const { count } = await supabase
+        .from('tracked_skills')
+        .select('*', { count: 'exact', head: true })
+        .eq('skill_id', skillId);
+      
+      setTrackerCount(count || 0);
+    } catch (err) {
+      console.error("Tracking fetch error:", err);
+    }
   }, [user?.id, skillId]);
 
   useEffect(() => {
     fetchSkillData();
-    fetchHoldingData();
-    
-    const skillChannel = supabase
-      .channel(`skill-${skillId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'skills', filter: `id=eq.${skillId}` }, (payload) => {
-        setSkill(payload.new as ExtendedSkill);
-      })
-      .subscribe();
-
-    const historyChannel = supabase
-      .channel(`history-${skillId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'price_history', filter: `skill_id=eq.${skillId}` }, (payload) => {
-        setPriceHistory(prev => {
-          const newHistory = [...prev, payload.new as PriceHistory];
-          return newHistory.length > 500 ? newHistory.slice(-500) : newHistory; 
-        });
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(skillChannel);
-      supabase.removeChannel(historyChannel);
-    };
-  }, [skillId, timeframe, fetchHoldingData]);
+    fetchTrackingData();
+  }, [skillId, timeframe, fetchTrackingData]);
 
   const fetchSkillData = async () => {
-    let historyQuery = supabase
-      .from('price_history')
-      .select('*')
-      .eq('skill_id', skillId)
-      .order('created_at', { ascending: true });
+    setFetchError(null);
+    try {
+      let historyQuery = supabase
+        .from('demand_history')
+        .select('*')
+        .eq('skill_id', skillId)
+        .order('created_at', { ascending: true });
 
-    if (timeframe !== 'ALL') {
-      const now = new Date();
-      let pastDate = new Date();
-      if (timeframe === '1H') pastDate.setHours(now.getHours() - 1);
-      if (timeframe === '1D') pastDate.setDate(now.getDate() - 1);
-      if (timeframe === '1W') pastDate.setDate(now.getDate() - 7);
-      
-      historyQuery = historyQuery.gte('created_at', pastDate.toISOString());
-    } else {
-      historyQuery = historyQuery.limit(500); 
+      if (timeframe !== 'ALL') {
+        const now = new Date();
+        let pastDate = new Date();
+        if (timeframe === '1H') pastDate.setHours(now.getHours() - 1);
+        if (timeframe === '1D') pastDate.setDate(now.getDate() - 1);
+        if (timeframe === '1W') pastDate.setDate(now.getDate() - 7);
+        historyQuery = historyQuery.gte('created_at', pastDate.toISOString());
+      } else {
+        historyQuery = historyQuery.limit(500); 
+      }
+
+      const [skillRes, historyRes] = await Promise.all([
+        supabase.from('skills').select('*').eq('id', skillId).single(),
+        historyQuery,
+      ]);
+
+      if (skillRes.error) throw new Error(skillRes.error.message);
+      setSkill(skillRes.data);
+      setPriceHistory(historyRes.data || []);
+    } catch (err: any) {
+      console.error("Failed to load skill:", err);
+      setFetchError(err.message || "Failed to load skill data.");
     }
-
-    const [skillRes, historyRes] = await Promise.all([
-      supabase.from('skills').select('*').eq('id', skillId).single(),
-      historyQuery,
-    ]);
-
-    if (skillRes.data) setSkill(skillRes.data as ExtendedSkill);
-    if (historyRes.data) setPriceHistory(historyRes.data);
   };
 
-  const tradeMutation = useMutation({
-    mutationFn: async () => {
+  const trackMutation = useMutation({
+    mutationFn: async ({ action, status }: { action: 'track' | 'untrack', status?: TrackStatus }) => {
       const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trade`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/track`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`
         },
-        body: JSON.stringify({ skillId, type: tradeType, quantity })
+        body: JSON.stringify({ skillId, action, status: status || 'interested' })
       });
-
       const result = await response.json();
-      if (!response.ok || result.error) {
-        throw new Error(result.error || 'Failed to execute action');
-      }
-      return result;
+      if (!response.ok) throw new Error(result.error);
+      return { action, status };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wallet'] });
-      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
-      
-      setSuccessMsg(`Successfully ${tradeType === 'buy' ? 'started tracking' : 'dropped'} ${quantity} units!`);
-      
-      refreshProfile(); 
-      fetchHoldingData(); 
-      
-      setTimeout(() => setSuccessMsg(''), 3000);
+    onSuccess: (data) => {
+      if (data.action === 'untrack') {
+        setIsTracked(false);
+        setTrackerCount(prev => Math.max(0, prev - 1));
+      } else {
+        if (!isTracked) setTrackerCount(prev => prev + 1);
+        setIsTracked(true);
+        if (data.status) setTrackingStatus(data.status);
+      }
     }
   });
 
-  if (!skill) {
+  if (fetchError) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+        <button onClick={onBack} className="flex items-center space-x-2 text-slate-400 hover:text-slate-800 font-bold mb-8 transition-colors">
+          <ArrowLeft className="w-5 h-5" /> <span>Back to Market Radar</span>
+        </button>
+        <div className="bg-rose-50 border border-rose-100 rounded-3xl p-12 flex flex-col items-center shadow-sm">
+          <AlertCircle className="w-16 h-16 text-rose-400 mb-4" />
+          <h2 className="text-2xl font-bold text-rose-900 mb-2">Data Unavailable</h2>
+          <p className="text-rose-600 font-medium">{fetchError}</p>
+        </div>
       </div>
     );
   }
 
-  const priceChange = ((skill.current_price - skill.initial_price) / skill.initial_price) * 100;
-  const isPositive = priceChange >= 0;
-  const totalCost = skill.current_price * quantity;
+  if (!skill) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh]">
+        <div className="relative">
+          <div className="absolute inset-0 bg-indigo-500 rounded-full blur-xl opacity-20 animate-pulse"></div>
+          <div className="animate-spin rounded-full h-14 w-14 border-4 border-indigo-100 border-t-indigo-600 relative z-10"></div>
+        </div>
+        <p className="text-slate-400 font-bold tracking-widest uppercase mt-6 animate-pulse text-sm">Loading Intelligence...</p>
+      </div>
+    );
+  }
 
-  const minPrice = priceHistory.length > 0 ? Math.min(...priceHistory.map(p => p.price)) : skill.current_price;
-  const maxPrice = priceHistory.length > 0 ? Math.max(...priceHistory.map(p => p.price)) : skill.current_price;
-  
+  const currentScore = skill.demand_score || skill.current_price || 0;
+  const initialScore = skill.initial_demand_score || skill.initial_price || 1; 
+  const jobListings = skill.current_job_listings || 0;
+
+  const demandChange = ((currentScore - initialScore) / initialScore) * 100;
+  const isPositive = demandChange >= 0;
+  const isHot = demandChange > 2 || trackerCount > 5;
+
   const chartData = priceHistory.map(p => {
     const date = new Date(p.created_at);
     let timeLabel = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    if (timeframe === '1W' || timeframe === 'ALL') {
-      timeLabel = `${date.getDate()}/${date.getMonth() + 1} ${timeLabel}`;
-    }
-
-    return {
-      time: timeLabel,
-      price: p.price
-    };
+    if (timeframe === '1W' || timeframe === 'ALL') timeLabel = `${date.getDate()}/${date.getMonth() + 1} ${timeLabel}`;
+    return { time: timeLabel, score: p.score || p.price || 0 };
   });
-
-  const demandScore = skill.external_demand_score || 1;
-  const isBullish = demandScore >= 1;
-
-  const isInsufficientBalance = tradeType === 'buy' && totalCost > (profile?.balance || 0);
-  const isInsufficientQuantity = tradeType === 'sell' && quantity > userHolding;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <button
-        onClick={onBack}
-        className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 mb-6"
-      >
-        <ArrowLeft className="w-5 h-5" />
-        <span>Back to Market</span>
+      <button onClick={onBack} className="flex items-center space-x-2 text-slate-500 hover:text-indigo-600 font-bold mb-6 transition-colors group">
+        <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /> 
+        <span>Market Radar</span>
       </button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column (Main Data) */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Header Block */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{skill.name}</h1>
-            <div className="flex items-center space-x-4">
-              <span className="text-4xl font-bold text-gray-900">
-                {skill.current_price.toFixed(2)} JC
-              </span>
-              <div className={`flex items-center space-x-1 ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                {isPositive ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
-                <span className="text-lg font-bold">
-                  {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
-                </span>
+          {/* Premium Header Block */}
+          <div className="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 p-8 relative overflow-hidden text-white">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full blur-[100px] opacity-20 pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500 rounded-full blur-[80px] opacity-10 pointer-events-none"></div>
+            
+            <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div>
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="bg-white/10 p-2.5 rounded-xl border border-white/5 backdrop-blur-md">
+                    <Code className="w-6 h-6 text-indigo-300" />
+                  </div>
+                  <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-300">
+                    {skill.name}
+                  </h1>
+                </div>
+                
+                {/* Skill DNA Tags */}
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {isHot && (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/30 text-orange-400 text-xs font-bold uppercase tracking-wider">
+                      <Flame className="w-3 h-3 mr-1.5" /> Surging Demand
+                    </span>
+                  )}
+                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400 text-xs font-bold uppercase tracking-wider">
+                    <Sparkles className="w-3 h-3 mr-1.5" /> High ROI
+                  </span>
+                </div>
+                
+                <div className="flex items-end space-x-4">
+                  <div className="flex flex-col">
+                    <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Live Score</span>
+                    <span className="text-5xl font-black tracking-tight">{currentScore.toFixed(1)}</span>
+                  </div>
+                  <div className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl border mb-1 backdrop-blur-md ${isPositive ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
+                    {isPositive ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                    <span className="font-bold text-sm">{isPositive ? '+' : ''}{demandChange.toFixed(2)}%</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex flex-col space-y-3 w-full md:w-auto">
+                <button 
+                  onClick={() => trackMutation.mutate({ action: isTracked ? 'untrack' : 'track' })}
+                  disabled={trackMutation.isPending || isMarketClosed}
+                  className={`flex items-center space-x-2 px-8 py-4 rounded-2xl font-bold transition-all duration-300 justify-center ${
+                    isTracked 
+                      ? 'bg-white/10 text-white hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/30 border border-white/20' 
+                      : 'bg-indigo-500 text-white hover:bg-indigo-400 hover:shadow-[0_0_30px_rgba(99,102,241,0.4)] hover:-translate-y-1'
+                  } disabled:opacity-50 disabled:hover:translate-y-0`}
+                >
+                  {trackMutation.isPending ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> 
+                  : isTracked ? <><BookmarkMinus className="w-5 h-5" /> <span>Untrack Skill</span></> 
+                  : <><BookmarkPlus className="w-5 h-5" /> <span>Add to Portfolio</span></>}
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Chart Block */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-              <h2 className="text-xl font-bold text-gray-900">Demand Score History</h2>
+          {/* The Learning Journey Tracker */}
+          {isTracked && (
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center">
+                <Crown className="w-5 h-5 mr-2 text-indigo-500" /> Your Learning Journey
+              </h2>
               
-              <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+              <div className="grid grid-cols-3 gap-4">
+                {[
+                  { id: 'interested', label: 'Interested', icon: Target, desc: 'Planning to learn' },
+                  { id: 'learning', label: 'Learning', icon: BrainCircuit, desc: 'Actively studying' },
+                  { id: 'mastered', label: 'Mastered', icon: Crown, desc: 'Ready for interviews' }
+                ].map((step) => {
+                  const isActive = trackingStatus === step.id;
+                  const Icon = step.icon;
+                  return (
+                    <button
+                      key={step.id}
+                      onClick={() => trackMutation.mutate({ action: 'track', status: step.id as TrackStatus })}
+                      disabled={trackMutation.isPending}
+                      className={`relative flex flex-col items-center justify-center p-4 rounded-2xl border transition-all duration-300 overflow-hidden ${
+                        isActive 
+                          ? 'bg-indigo-50 border-indigo-500 shadow-md transform -translate-y-1' 
+                          : 'bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                      }`}
+                    >
+                      {isActive && <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/10 to-transparent pointer-events-none"></div>}
+                      <Icon className={`w-8 h-8 mb-2 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
+                      <span className={`font-bold ${isActive ? 'text-indigo-900' : 'text-slate-600'}`}>{step.label}</span>
+                      <span className="text-[10px] text-slate-400 font-medium uppercase mt-1 hidden sm:block">{step.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Chart Block */}
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-indigo-50 rounded-lg">
+                  <Activity className="w-5 h-5 text-indigo-600" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-800">Demand Trajectory</h2>
+              </div>
+              
+              <div className="flex space-x-1 bg-slate-100/80 p-1.5 rounded-xl mt-4 sm:mt-0 border border-slate-200/50">
                 {(['1H', '1D', '1W', 'ALL'] as Timeframe[]).map((tf) => (
-                  <button
-                    key={tf}
-                    onClick={() => setTimeframe(tf)}
-                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-                      timeframe === tf
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'
-                    }`}
+                  <button 
+                    key={tf} 
+                    onClick={() => setTimeframe(tf)} 
+                    className={`px-5 py-1.5 text-sm font-bold rounded-lg transition-all ${timeframe === tf ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                   >
                     {tf}
                   </button>
@@ -220,284 +292,153 @@ export const SkillDetail = ({ skillId, onBack }: SkillDetailProps) => {
               </div>
             </div>
 
-            <div className="h-72 w-full relative">
+            <div className="h-80 w-full relative">
               {priceHistory.length > 1 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart 
-                    data={chartData}
-                    margin={{ top: 10, right: 0, left: 0, bottom: 0 }}
-                  >
+                  <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={isPositive ? '#22c55e' : '#ef4444'} stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor={isPositive ? '#22c55e' : '#ef4444'} stopOpacity={0}/>
+                        <stop offset="5%" stopColor={isPositive ? '#10b981' : '#6366f1'} stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor={isPositive ? '#10b981' : '#6366f1'} stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="time" hide />
                     <YAxis domain={['dataMin', 'dataMax']} hide />
-                    <Tooltip
-                      cursor={{ stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '4 4' }}
-                      contentStyle={{ 
-                        borderRadius: '8px', 
-                        border: 'none', 
-                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' 
-                      }}
-                      labelStyle={{ color: '#6b7280', marginBottom: '4px' }}
-                      formatter={(value: number) => [`${value.toFixed(2)} JC`, 'Score']}
+                    <Tooltip 
+                      cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }} 
+                      contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', padding: '12px 16px' }} 
+                      labelStyle={{ color: '#64748b', fontWeight: 'bold', marginBottom: '4px' }} 
+                      formatter={(value: number) => [<span className="font-bold text-slate-800">Score: {value.toFixed(1)}</span>, '']} 
                     />
-                    <Area
-                      type="monotone"
-                      dataKey="price"
-                      stroke={isPositive ? '#22c55e' : '#ef4444'}
-                      strokeWidth={3}
-                      fillOpacity={1}
-                      fill="url(#colorPrice)"
-                      isAnimationActive={false}
-                    />
+                    <Area type="monotone" dataKey="score" stroke={isPositive ? '#10b981' : '#6366f1'} strokeWidth={4} fillOpacity={1} fill="url(#colorPrice)" isAnimationActive={false} />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex items-center justify-center h-full text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                  {priceHistory.length === 1 
-                    ? `Not enough data in the last ${timeframe} to draw a trend` 
-                    : `No data available in the last ${timeframe}`}
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                  <Activity className="w-8 h-8 mb-2 text-slate-300" />
+                  <span className="font-medium">Gathering trend data...</span>
                 </div>
               )}
-            </div>
-            
-            <div className="flex justify-between text-sm text-gray-500 mt-4 font-medium">
-              <span>Min: {minPrice.toFixed(2)} JC</span>
-              <span>Max: {maxPrice.toFixed(2)} JC</span>
-            </div>
-          </div>
-
-          {/* --- NEW: LEARNING CONTENT INTEGRATION --- */}
-          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-2xl shadow-sm p-6">
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="bg-indigo-100 p-2 rounded-lg shadow-inner">
-                <BookOpen className="w-6 h-6 text-indigo-700" />
-              </div>
-              <h2 className="text-xl font-bold text-indigo-900">How to acquire this skill</h2>
-            </div>
-            
-            <p className="text-sm text-indigo-800 mb-6 font-medium">
-              Don't just track market demand—build your expertise. Here are curated free resources to master <strong>{skill.name}</strong>.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* YouTube Crash Course Link */}
-              <a 
-                href={`https://www.youtube.com/results?search_query=${encodeURIComponent(skill.name + ' full course tutorial for beginners')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex flex-col items-center justify-center p-5 bg-white rounded-xl border border-indigo-100 hover:border-red-300 hover:shadow-md transition-all group"
-              >
-                <Youtube className="w-8 h-8 text-red-500 mb-3 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-gray-900 text-sm">Video Crash Course</span>
-                <span className="text-xs text-gray-500 mt-1 flex items-center">YouTube Free <ExternalLink className="w-3 h-3 ml-1"/></span>
-              </a>
-
-              {/* Roadmap.sh Link */}
-              <a 
-                href={`https://roadmap.sh/search?q=${encodeURIComponent(skill.name)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex flex-col items-center justify-center p-5 bg-white rounded-xl border border-indigo-100 hover:border-yellow-400 hover:shadow-md transition-all group"
-              >
-                <Map className="w-8 h-8 text-amber-500 mb-3 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-gray-900 text-sm">Career Roadmap</span>
-                <span className="text-xs text-gray-500 mt-1 flex items-center">Roadmap.sh <ExternalLink className="w-3 h-3 ml-1"/></span>
-              </a>
-
-              {/* Google Docs Link */}
-              <a 
-                href={`https://www.google.com/search?q=${encodeURIComponent(skill.name + ' official documentation tutorial')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex flex-col items-center justify-center p-5 bg-white rounded-xl border border-indigo-100 hover:border-blue-400 hover:shadow-md transition-all group"
-              >
-                <BookOpen className="w-8 h-8 text-blue-500 mb-3 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-gray-900 text-sm">Official Guides</span>
-                <span className="text-xs text-gray-500 mt-1 flex items-center">Web Resources <ExternalLink className="w-3 h-3 ml-1"/></span>
-              </a>
-            </div>
-          </div>
-          {/* ---------------------------------------- */}
-
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Market Stats</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-600">Initial Score</p>
-                  <p className="text-lg font-bold text-gray-900">{skill.initial_price.toFixed(2)} JC</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Total Volume</p>
-                  <p className="text-lg font-bold text-gray-900">{skill.total_buy_volume + skill.total_sell_volume}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Track Volume</p>
-                  <p className="text-lg font-bold text-green-600">{skill.total_buy_volume}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Drop Volume</p>
-                  <p className="text-lg font-bold text-red-600">{skill.total_sell_volume}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 relative overflow-hidden">
-              <div className="absolute top-0 right-0 -mt-4 -mr-4 text-gray-100">
-                <Briefcase className="w-32 h-32 opacity-50" />
-              </div>
-              <div className="relative z-10">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Real-World Demand</h2>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">Active Job Listings</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {skill.current_job_listings ? skill.current_job_listings.toLocaleString() : 'Syncing...'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">Market Trend</p>
-                    <div className="flex items-center space-x-2">
-                      {isBullish ? (
-                        <TrendingUp className="w-5 h-5 text-green-600" />
-                      ) : (
-                        <TrendingDown className="w-5 h-5 text-red-600" />
-                      )}
-                      <p className={`text-lg font-bold ${isBullish ? 'text-green-600' : 'text-red-600'}`}>
-                        {isBullish ? 'Bullish (Hiring Up)' : 'Bearish (Hiring Down)'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
 
         {/* Right Sidebar */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-20">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Simulate Action</h2>
-
-            {/* Academic Mode Banner */}
-            {isMarketClosed && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-start space-x-3">
-                <Clock className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-bold text-amber-900">Academic Mode Active</p>
-                  <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                    The simulation is paused during test hours <strong>(9 PM - 9 AM)</strong>. You can analyze data, but actions are temporarily disabled.
-                  </p>
+        <div className="lg:col-span-1 space-y-6">
+          
+          {/* Enhanced Market Reality Card */}
+          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-3xl shadow-sm border border-indigo-100 p-7 relative overflow-hidden">
+            <h2 className="text-xl font-bold mb-6 flex items-center text-slate-800 tracking-tight">
+              <Briefcase className="w-5 h-5 mr-2.5 text-indigo-500" /> Market Reality
+            </h2>
+            
+            <div className="space-y-4 relative z-10">
+              <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1.5">Active Job Listings</p>
+                <p className="text-3xl font-black tracking-tight text-slate-800">{jobListings ? jobListings.toLocaleString() : 'Syncing...'}</p>
+              </div>
+              
+              <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1.5">Students Tracking</p>
+                <div className="flex items-center text-3xl font-black tracking-tight text-slate-800">
+                  <Users className="w-6 h-6 mr-3 text-indigo-500" />
+                  {trackerCount}
                 </div>
               </div>
-            )}
-
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6 flex justify-between items-center">
-              <span className="text-sm font-medium text-blue-900">Quantity you are tracking:</span>
-              <span className="text-xl font-bold text-blue-700">{userHolding}</span>
             </div>
-
-            <div className="flex space-x-2 mb-6">
-              <button
-                onClick={() => setTradeType('buy')}
-                className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
-                  tradeType === 'buy'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Track
-              </button>
-              <button
-                onClick={() => setTradeType('sell')}
-                className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
-                  tradeType === 'sell'
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Drop
-              </button>
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Quantity
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={quantity}
-                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              {isInsufficientQuantity && (
-                <p className="text-sm text-red-600 mt-2 font-medium">Insufficient quantity to drop</p>
-              )}
-            </div>
-
-            <div className="bg-gray-50 rounded-lg p-4 mb-6 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Score per unit</span>
-                <span className="font-medium text-gray-900">{skill.current_price.toFixed(2)} JC</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Quantity</span>
-                <span className="font-medium text-gray-900">{quantity}</span>
-              </div>
-              <div className="h-px bg-gray-200 my-2"></div>
-              <div className="flex justify-between">
-                <span className="font-medium text-gray-900">Total</span>
-                <span className="text-xl font-bold text-gray-900">{totalCost.toFixed(2)} JC</span>
-              </div>
-            </div>
-
-            <div className="mb-6">
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-gray-600">Your Available Credits</span>
-                <span className="font-bold text-gray-900">{profile?.balance.toFixed(2)} JC</span>
-              </div>
-              {isInsufficientBalance && (
-                <p className="text-sm text-red-600">Insufficient credits</p>
-              )}
-            </div>
-
-            {tradeMutation.error && (
-              <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">
-                {tradeMutation.error.message}
-              </div>
-            )}
-
-            {successMsg && (
-              <div className="bg-green-50 text-green-700 px-4 py-3 rounded-lg text-sm mb-4">
-                {successMsg}
-              </div>
-            )}
-
-            <button
-              onClick={() => tradeMutation.mutate()}
-              disabled={tradeMutation.isPending || isInsufficientBalance || isInsufficientQuantity || isMarketClosed}
-              className={`w-full py-3 rounded-lg font-bold transition-colors ${
-                tradeType === 'buy'
-                  ? 'bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-300 disabled:cursor-not-allowed'
-                  : 'bg-red-600 hover:bg-red-700 text-white disabled:bg-gray-300 disabled:cursor-not-allowed'
-              }`}
-            >
-              {tradeMutation.isPending 
-                ? 'Processing...' 
-                : isMarketClosed 
-                  ? 'Market Closed' 
-                  : tradeType === 'buy' 
-                    ? 'Start Tracking' 
-                    : 'Drop Skill'}
-            </button>
           </div>
+
+          {/* 🔥 ENHANCED ACTION PLAN CARD */}
+          <div className="bg-white/80 backdrop-blur-xl border border-slate-100 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-7 relative overflow-hidden">
+            
+            {/* Subtle background flair */}
+            <div className="absolute -right-10 -top-10 w-40 h-40 bg-indigo-50 rounded-full blur-3xl opacity-60"></div>
+            
+            <div className="flex items-center space-x-3 mb-6 relative z-10">
+              <div className="bg-gradient-to-br from-indigo-500 to-blue-600 p-2.5 rounded-xl shadow-lg shadow-indigo-200 text-white">
+                <Rocket className="w-5 h-5" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-800 tracking-tight">Action Plan</h2>
+            </div>
+            
+            <div className="space-y-4 relative z-10">
+              {/* Option 1: Video Course */}
+              <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(skill.name + ' full course tutorial')}`} target="_blank" rel="noopener noreferrer" 
+                 className="flex items-center p-4 rounded-2xl border border-slate-100 bg-white hover:border-red-200 hover:shadow-md transition-all duration-300 group">
+                <div className="p-3 bg-red-50 text-red-600 rounded-xl mr-4 group-hover:scale-110 transition-transform duration-300">
+                  <Youtube className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-slate-800 text-sm group-hover:text-indigo-600 transition-colors">Video Crash Course</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">Visual step-by-step guides</p>
+                </div>
+                <div className="bg-slate-50 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0">
+                  <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-red-500 transition-colors" />
+                </div>
+              </a>
+
+              {/* Option 2: Roadmap */}
+              <a href={`https://roadmap.sh/search?q=${encodeURIComponent(skill.name)}`} target="_blank" rel="noopener noreferrer" 
+                 className="flex items-center p-4 rounded-2xl border border-slate-100 bg-white hover:border-amber-200 hover:shadow-md transition-all duration-300 group">
+                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl mr-4 group-hover:scale-110 transition-transform duration-300">
+                  <Map className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-slate-800 text-sm group-hover:text-indigo-600 transition-colors">Interactive Roadmap</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">Structured learning paths</p>
+                </div>
+                <div className="bg-slate-50 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0">
+                  <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-amber-500 transition-colors" />
+                </div>
+              </a>
+
+              {/* Option 3: Documentation */}
+              <a href={`https://www.google.com/search?q=${encodeURIComponent(skill.name + ' official documentation tutorial')}`} target="_blank" rel="noopener noreferrer" 
+                 className="flex items-center p-4 rounded-2xl border border-slate-100 bg-white hover:border-blue-200 hover:shadow-md transition-all duration-300 group">
+                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl mr-4 group-hover:scale-110 transition-transform duration-300">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-slate-800 text-sm group-hover:text-indigo-600 transition-colors">Official Docs</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">Deep dive into the syntax</p>
+                </div>
+                <div className="bg-slate-50 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0">
+                  <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                </div>
+              </a>
+
+              {/* Option 4: Projects */}
+              <a href={`https://github.com/search?q=${encodeURIComponent('build a ' + skill.name + ' project')}`} target="_blank" rel="noopener noreferrer" 
+                 className="flex items-center p-4 rounded-2xl border border-slate-100 bg-white hover:border-emerald-200 hover:shadow-md transition-all duration-300 group">
+                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl mr-4 group-hover:scale-110 transition-transform duration-300">
+                  <Terminal className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-slate-800 text-sm group-hover:text-indigo-600 transition-colors">Build Projects</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">Learn by writing code</p>
+                </div>
+                <div className="bg-slate-50 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0">
+                  <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-emerald-500 transition-colors" />
+                </div>
+              </a>
+            </div>
+          </div>
+
+          {/* Academic Mode Warning */}
+          {isMarketClosed && (
+            <div className="bg-amber-50 border border-amber-100 rounded-3xl p-6 flex items-start space-x-4 shadow-sm">
+              <div className="bg-amber-100 p-2 rounded-xl mt-0.5 flex-shrink-0">
+                <Clock className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-amber-900 mb-1">Academic Mode Active</p>
+                <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                  Tracking updates are paused during typical lecture hours to ensure focus. You can still analyze the market data.
+                </p>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </div>

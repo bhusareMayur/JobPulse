@@ -12,32 +12,29 @@ router.get('/hod', async (req, res) => {
   }
 
   try {
-    // 1. Fetch skills with real-world job listings
-    const { data: skills, error: skillsErr } = await supabase.from('skills').select('id, name, current_job_listings');
+    // 1. Fetch skills with real-world job listings and demand scores
+    const { data: skills, error: skillsErr } = await supabase.from('skills').select('id, name, current_job_listings, demand_score');
     if (skillsErr) throw skillsErr;
 
-    // 2. Fetch student holdings
-    const { data: holdings, error: holdingsErr } = await supabase.from('holdings').select('skill_id, quantity');
-    if (holdingsErr) throw holdingsErr;
+    // 2. Fetch student tracked skills
+    const { data: tracked, error: trackedErr } = await supabase.from('tracked_skills').select('skill_id, user_id');
+    if (trackedErr) throw trackedErr;
 
-    // 3. Fetch total trade activity
-    const { count: totalTrades } = await supabase.from('trades').select('*', { count: 'exact', head: true });
-
-    // 4. Get total active students
+    // 3. Get total active students
     const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
 
-    // 5. Aggregate holdings
+    // 4. Aggregate tracked skills
     const distribution = {};
-    if (holdings) {
-      holdings.forEach(h => {
-        if (!distribution[h.skill_id]) distribution[h.skill_id] = 0;
-        distribution[h.skill_id] += h.quantity;
+    if (tracked) {
+      tracked.forEach(t => {
+        if (!distribution[t.skill_id]) distribution[t.skill_id] = 0;
+        distribution[t.skill_id] += 1; // Count 1 per student tracking it
       });
     }
 
-    // 6. Format data for charts
+    // 5. Format data for charts
     const maxJobs = Math.max(...skills.map(s => s.current_job_listings || 1));
-    const maxHoldings = Math.max(...Object.values(distribution).length ? Object.values(distribution) : [1]);
+    const maxTracks = Math.max(...Object.values(distribution).length ? Object.values(distribution) : [1]);
 
     let totalStudentVol = 0;
     let totalMarketVol = 0;
@@ -49,12 +46,12 @@ router.get('/hod', async (req, res) => {
       totalStudentVol += studentVolume;
       totalMarketVol += marketVolume;
 
-      const normalizedStudent = (studentVolume / maxHoldings) * 100;
+      const normalizedStudent = (studentVolume / maxTracks) * 100;
       const normalizedMarket = (marketVolume / maxJobs) * 100;
 
       return {
         name: skill.name,
-        value: studentVolume,
+        value: studentVolume, // Number of students tracking
         marketJobs: marketVolume,
         studentScore: Math.round(normalizedStudent) || 0,
         marketScore: Math.round(normalizedMarket) || 0
@@ -62,7 +59,7 @@ router.get('/hod', async (req, res) => {
     }).filter(item => item.value > 0 || item.marketJobs > 0)
       .sort((a, b) => b.value - a.value);
 
-    // 7. CALCULATE PLACEMENT READINESS SCORE
+    // 6. CALCULATE PLACEMENT READINESS SCORE
     let totalVariance = 0;
     if (totalStudentVol > 0 && totalMarketVol > 0) {
       chartData.forEach(item => {
@@ -73,137 +70,65 @@ router.get('/hod', async (req, res) => {
     }
     const readinessScore = totalStudentVol === 0 ? 0 : Math.round(100 - (totalVariance / 2));
 
-    // 8. Generate Actionable Insights
+    // 7. Generate Actionable Insights
     const topStudentSkill = chartData[0]?.name || 'N/A';
     const topMarketSkill = [...chartData].sort((a, b) => b.marketJobs - a.marketJobs)[0]?.name || 'N/A';
     
     let insight = `Students are highly focused on ${topStudentSkill}. `;
     if (readinessScore < 70) {
-      insight += `CRITICAL: The Placement Readiness Score is critically low (${readinessScore}/100). Students are heavily investing in skills the market is not prioritizing. Urgent intervention required.`;
+      insight += `CRITICAL: The Placement Readiness Score is critically low (${readinessScore}/100). Students are prioritizing skills the market is not demanding. Urgent curriculum review required.`;
     } else if (topStudentSkill !== topMarketSkill) {
       insight += `However, the highest real-world demand is currently for ${topMarketSkill}. Consider organizing a seminar on ${topMarketSkill} to bridge this gap.`;
     } else {
-      insight += `This perfectly aligns with current market demand! The department curriculum is highly effective.`;
-    }
-
-    // 9. OPTIMAL: FETCH TOP MARKET ANALYSTS (Top 5 Students)
-    const { data: topUsersView, error: topUsersErr } = await supabase
-      .from('leaderboard_view')
-      .select('user_id, total_wealth, profit')
-      .order('total_wealth', { ascending: false })
-      .limit(5); // Only fetch exactly 5 rows (instantly fast)
-
-    let topAnalysts = [];
-    if (!topUsersErr && topUsersView?.length > 0) {
-      const topUserIds = topUsersView.map(u => u.user_id);
-
-      // Fetch Profiles (for names) using exactly those 5 IDs
-      const { data: profilesData } = await supabase.from('profiles').select('id, full_name').in('id', topUserIds);
-
-      // Fetch Holdings for just these 5 users to find their #1 skill
-      const { data: topHoldings } = await supabase.from('holdings').select('user_id, skill_id, quantity').in('user_id', topUserIds);
-
-      // Fetch exactly 5 emails in parallel (Bypasses the 2,000 user list limit bottleneck)
-      const authPromises = topUserIds.map(id => supabase.auth.admin.getUserById(id));
-      const authResults = await Promise.all(authPromises);
-      const authMap = {};
-      authResults.forEach(res => {
-        if (res.data?.user) authMap[res.data.user.id] = res.data.user;
-      });
-
-      // Build the final array
-      topAnalysts = topUsersView.map((user, index) => {
-        const profile = profilesData?.find(p => p.id === user.user_id);
-        const authUser = authMap[user.user_id];
-        
-        // Find their max holding quantity
-        const userHoldings = topHoldings?.filter(h => h.user_id === user.user_id) || [];
-        let topSkillId = null;
-        let maxQuantity = 0;
-        userHoldings.forEach(h => {
-          if (h.quantity > maxQuantity) {
-            maxQuantity = h.quantity;
-            topSkillId = h.skill_id;
-          }
-        });
-
-        // Reuse the memory array from Step 1 to find the name (Zero DB Cost)
-        const topSkill = skills.find(s => s.id === topSkillId);
-
-        return {
-          rank: index + 1,
-          id: user.user_id,
-          name: profile?.full_name || authUser?.user_metadata?.full_name || 'Unknown Student',
-          email: authUser?.email || 'No Email Registered',
-          wealth: Number(user.total_wealth),
-          topSkill: topSkill ? topSkill.name : 'Holding Cash' // If no skills held, they are holding cash
-        };
-      });
+      insight += `This aligns perfectly with current market demand! The department curriculum is highly effective.`;
     }
 
     res.json({
       chartData,
       totalUsers: userCount || 0,
-      totalTrades: totalTrades || 0,
+      totalEngagements: tracked?.length || 0,
       readinessScore,
       insight,
       topMarketSkill,
-      topAnalysts // Sending the new watchlist to the frontend
+      topAnalysts: [] // We cleared the financial leaderboard, so send an empty array for now
     });
   } catch (error) {
-    console.error("Analytics Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
-
 router.get('/batch-trends', async (req, res) => {
   try {
-    const targetYear = req.query.year || 2026; // Default to the current placement batch
+    const targetYear = req.query.year || 2026;
     
-    // 1. Find all users in the target graduation year
-    const { data: profiles, error: profileErr } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('graduation_year', targetYear);
-
+    // Find all users in the target graduation year
+    const { data: profiles, error: profileErr } = await supabase.from('profiles').select('id').eq('graduation_year', targetYear);
     if (profileErr) throw profileErr;
     
     const userIds = profiles.map(p => p.id);
     if (userIds.length === 0) return res.json([]);
 
-    // 2. Fetch all holdings for JUST those seniors
-    const { data: holdings, error: holdingsErr } = await supabase
-      .from('holdings')
-      .select('skill_id, quantity, skills(name, current_price)')
+    // Fetch tracked skills for those seniors
+    const { data: tracked, error: trackedErr } = await supabase
+      .from('tracked_skills')
+      .select('skill_id, skills(name, demand_score)')
       .in('user_id', userIds);
+    if (trackedErr) throw trackedErr;
 
-    if (holdingsErr) throw holdingsErr;
-
-    // 3. Aggregate the data to find the most popular skills
+    // Aggregate
     const skillCounts = {};
-    if (holdings) {
-      holdings.forEach(h => {
-        if (!skillCounts[h.skill_id]) {
-          skillCounts[h.skill_id] = { 
-            id: h.skill_id, 
-            name: h.skills.name, 
-            price: h.skills.current_price,
-            volumeHeld: 0 
-          };
+    if (tracked) {
+      tracked.forEach(t => {
+        if (!skillCounts[t.skill_id]) {
+          skillCounts[t.skill_id] = { id: t.skill_id, name: t.skills.name, score: t.skills.demand_score, volumeHeld: 0 };
         }
-        skillCounts[h.skill_id].volumeHeld += h.quantity;
+        skillCounts[t.skill_id].volumeHeld += 1;
       });
     }
 
-    // 4. Sort and return the Top 3
-    const topSkills = Object.values(skillCounts)
-      .sort((a, b) => b.volumeHeld - a.volumeHeld)
-      .slice(0, 3);
-
+    const topSkills = Object.values(skillCounts).sort((a, b) => b.volumeHeld - a.volumeHeld).slice(0, 3);
     res.json(topSkills);
   } catch (error) {
-    console.error("Batch Trends Error:", error);
     res.status(500).json({ error: error.message });
   }
 });

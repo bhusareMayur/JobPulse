@@ -1,256 +1,344 @@
 import { useState, useEffect } from 'react';
-import { User, Share2, Copy, Check, LogOut, Wallet, Calendar } from 'lucide-react';
+import { 
+  User, Share2, LogOut, Calendar, 
+  BookOpen, Target, Crown, GraduationCap, 
+  Sparkles, Link as LinkIcon, Check, Pencil, Save, X
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
 export const Profile = () => {
   const { user, profile, signOut } = useAuth();
+  const [stats, setStats] = useState({ interested: 0, learning: 0, mastered: 0, total: 0 });
+  const [loadingStats, setLoadingStats] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [totalWealth, setTotalWealth] = useState<number>(0);
-  const [loadingWealth, setLoadingWealth] = useState(true);
 
-  // Fetch holdings to calculate Total Wealth (Cash + Assets)
+  // Edit State
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editBatch, setEditBatch] = useState('');
+  const [editDepartment, setEditDepartment] = useState('');
+
+  const departments = [
+    'Computer Science', 'Information Technology', 'Data Science', 
+    'Electronics & Telecommunication', 'Mechanical', 'Civil', 'Other'
+  ];
+  
+  const years = ['2024', '2025', '2026', '2027', '2028', '2029'];
+
+  // Sync profile data to local state when loaded
   useEffect(() => {
-    if (user && profile) {
-      calculateWealth();
+    if (profile || user) {
+      setEditName(profile?.full_name || profile?.name || user?.user_metadata?.full_name || 'Student Analyst');
+      setEditBatch(profile?.graduation_year?.toString() || '2026');
+      setEditDepartment(profile?.department || 'Computer Science');
     }
-  }, [user, profile]);
+  }, [profile, user]);
 
-  const calculateWealth = async () => {
+  // Fetch Readiness Stats from tracked_skills table
+  useEffect(() => {
+    if (user) fetchLearningStats();
+  }, [user]);
+
+  const fetchLearningStats = async () => {
     try {
-      const { data: holdings } = await supabase
-        .from('holdings')
-        .select('quantity, skills(current_price)')
+      const { data, error } = await supabase
+        .from('tracked_skills')
+        .select('status')
         .eq('user_id', user?.id);
 
-      let portfolioValue = 0;
-      if (holdings) {
-        holdings.forEach((h: any) => {
-          portfolioValue += h.quantity * (h.skills?.current_price || 0);
-        });
+      if (error) throw error;
+
+      if (data) {
+        const total = data.length;
+        const interested = data.filter(d => d.status === 'interested').length;
+        const learning = data.filter(d => d.status === 'learning').length;
+        const mastered = data.filter(d => d.status === 'mastered').length;
+        
+        setStats({ interested, learning, mastered, total });
       }
-      setTotalWealth((profile?.balance || 0) + portfolioValue);
     } catch (error) {
-      console.error('Error calculating portfolio score:', error);
+      console.error('Error fetching learning stats:', error);
     } finally {
-      setLoadingWealth(false);
+      setLoadingStats(false);
     }
   };
 
-  const copyReferralCode = () => {
-    if (profile?.referral_code) {
-      navigator.clipboard.writeText(profile.referral_code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  // Save changes to the profiles table
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: editName,
+          graduation_year: parseInt(editBatch) || 2026,
+          department: editDepartment
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      
+      setIsEditing(false);
+    } catch (err) {
+      console.error("Failed to update profile", err);
+      alert("Failed to save changes. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // WhatsApp Sharing Function
+  const copyPlatformLink = () => {
+    navigator.clipboard.writeText('https://job-pulse-pi.vercel.app/');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleWhatsAppShare = () => {
-    if (!profile?.referral_code) return;
-    
-    // Create the message with a slogan, code, and steps using educational language
-    const message = `🚀 Track in-demand career skills on the JobPulse Simulator!\n\nSign up using my invite code and get an instant 500 JC bonus after your first simulation.\n\n🔑 My Invite Code: *${profile.referral_code}*\n\nHow to claim:\n1️⃣ Go to https://job-pulse-pi.vercel.app/\n2️⃣ Sign up and enter my code\n3️⃣ Complete your first simulation\n4️⃣ Get 500 JC (JobCoins) instantly! 🎓`;
-    
-    // URL-encode the text to safely pass it to WhatsApp
+    const message = `🚀 Hey! I'm tracking real-world job market skills and preparing for placements on JobPulse.\n\nJoin me and start building your readiness portfolio: https://job-pulse-pi.vercel.app/ 🎓`;
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    
-    // Open WhatsApp in a new tab (works for both web and mobile)
     window.open(whatsappUrl, '_blank');
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">My Profile</h1>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div className="max-w-5xl mx-auto px-4 py-10">
+      
+      {/* 🌟 Premium Cover Photo Header & Editor */}
+      <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] overflow-hidden mb-8 border border-slate-100 transition-all">
+        <div className="h-40 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 relative">
+          <div className="absolute inset-0 bg-white/10 backdrop-blur-[2px]"></div>
+          <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent bg-[length:20px_20px]"></div>
+        </div>
         
-        {/* Left Column: Account Information */}
-        <div className="flex flex-col space-y-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-            {/* Header Section */}
-            <div className="p-6 border-b border-gray-100 flex items-center space-x-4 bg-gray-50/50">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 shadow-inner">
-                <User className="w-8 h-8 text-blue-600" />
+        <div className="px-8 pb-8 relative">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 -mt-16">
+            
+            <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5">
+              <div className="w-32 h-32 bg-white rounded-full p-1.5 shadow-xl relative z-10">
+                <div className="w-full h-full bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center overflow-hidden">
+                  <User className="w-14 h-14 text-indigo-300" />
+                </div>
               </div>
-              <div className="min-w-0">
-                <h2 className="text-xl font-bold text-gray-900 truncate">
-                  {user?.email}
-                </h2>
-                <p className="text-sm text-gray-500 flex items-center mt-1">
-                  <Calendar className="w-4 h-4 mr-1" /> 
-                  Joined {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Recently'}
+              
+              {/* Profile Info / Edit Mode Toggle */}
+              {isEditing ? (
+                <div className="text-center sm:text-left pb-2 space-y-3 animate-in fade-in zoom-in-95 duration-200 w-full sm:w-auto">
+                  
+                  {/* Name Input */}
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="text-2xl sm:text-3xl font-black text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 w-full max-w-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
+                    placeholder="Full Name"
+                  />
+                  
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Batch Dropdown */}
+                    <select
+                      value={editBatch}
+                      onChange={(e) => setEditBatch(e.target.value)}
+                      className="text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 w-full sm:w-32 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                    >
+                      {years.map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+
+                    {/* Department Dropdown */}
+                    <select
+                      value={editDepartment}
+                      onChange={(e) => setEditDepartment(e.target.value)}
+                      className="text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 w-full max-w-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                    >
+                      {departments.map(dept => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex justify-center sm:justify-start gap-2 mt-2">
+                    <button 
+                      onClick={handleSaveProfile} 
+                      disabled={isSaving} 
+                      className="flex items-center space-x-1.5 bg-indigo-600 text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+                    >
+                      {isSaving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <Save className="w-4 h-4" />}
+                      <span>Save</span>
+                    </button>
+                    <button 
+                      onClick={() => setIsEditing(false)} 
+                      disabled={isSaving} 
+                      className="flex items-center space-x-1.5 bg-slate-100 text-slate-600 px-5 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                      <span>Cancel</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center sm:text-left pb-2">
+                  <div className="flex items-center justify-center sm:justify-start gap-3 mb-2 group">
+                    <h1 className="text-3xl font-black text-slate-800 tracking-tight">
+                      {editName}
+                    </h1>
+                    <button 
+                      onClick={() => setIsEditing(true)} 
+                      className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100" 
+                      title="Edit Profile"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap justify-center sm:justify-start gap-3 text-sm font-bold text-slate-500">
+                    <span className="flex items-center bg-slate-100 px-3 py-1 rounded-full text-slate-600 border border-slate-200 shadow-sm">
+                      <GraduationCap className="w-4 h-4 mr-1.5 text-indigo-500" /> 
+                      Class of {editBatch}
+                    </span>
+                    <span className="flex items-center bg-slate-100 px-3 py-1 rounded-full text-slate-600 border border-slate-200 shadow-sm">
+                      <BookOpen className="w-4 h-4 mr-1.5 text-indigo-500" /> 
+                      {editDepartment}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Logout Button */}
+            <div className="flex justify-center sm:justify-end pb-2">
+               <button
+                onClick={() => signOut()}
+                className="flex items-center space-x-2 py-2.5 px-6 bg-white border border-rose-200 text-rose-600 rounded-xl hover:bg-rose-50 hover:border-rose-300 transition-all font-bold shadow-sm"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Left Column: Readiness Portfolio (Takes up 2/3 of space) */}
+        <div className="lg:col-span-2 flex flex-col space-y-8">
+          
+          <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-xl font-bold text-slate-800 flex items-center">
+                <Sparkles className="w-5 h-5 mr-2 text-indigo-500" /> 
+                Placement Readiness Status
+              </h2>
+              <span className="bg-indigo-50 text-indigo-600 font-bold text-xs px-3 py-1 rounded-lg border border-indigo-100">
+                {stats.total} Skills Tracked
+              </span>
+            </div>
+
+            {loadingStats ? (
+              <div className="grid grid-cols-3 gap-6 animate-pulse">
+                <div className="h-32 bg-slate-100 rounded-2xl"></div>
+                <div className="h-32 bg-slate-100 rounded-2xl"></div>
+                <div className="h-32 bg-slate-100 rounded-2xl"></div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow">
+                  <div className="bg-white p-3 rounded-2xl shadow-sm mb-3">
+                    <Target className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <p className="text-3xl font-black text-slate-700">{stats.interested}</p>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Interested</p>
+                </div>
+                
+                <div className="bg-gradient-to-b from-indigo-50 to-blue-50 p-6 rounded-3xl border border-indigo-100 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-200 rounded-full blur-2xl opacity-50"></div>
+                  <div className="bg-white p-3 rounded-2xl shadow-sm mb-3 relative z-10">
+                    <BookOpen className="w-6 h-6 text-indigo-500" />
+                  </div>
+                  <p className="text-3xl font-black text-indigo-700 relative z-10">{stats.learning}</p>
+                  <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mt-1 relative z-10">Learning</p>
+                </div>
+
+                <div className="bg-gradient-to-b from-emerald-50 to-teal-50 p-6 rounded-3xl border border-emerald-100 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-200 rounded-full blur-2xl opacity-50"></div>
+                  <div className="bg-white p-3 rounded-2xl shadow-sm mb-3 relative z-10">
+                    <Crown className="w-6 h-6 text-emerald-500" />
+                  </div>
+                  <p className="text-3xl font-black text-emerald-700 relative z-10">{stats.mastered}</p>
+                  <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mt-1 relative z-10">Mastered</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
+            <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center">
+              <Calendar className="w-5 h-5 mr-2 text-indigo-500" /> 
+              Account Details
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Registered Email</p>
+                <p className="text-slate-800 font-bold">{user?.email}</p>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Member Since</p>
+                <p className="text-slate-800 font-bold">
+                  {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Recently Joined'}
                 </p>
               </div>
             </div>
-
-            {/* Body Section */}
-            <div className="p-6 space-y-6">
-              {/* Wealth Stats Grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                  <p className="text-sm text-gray-500 mb-1 font-medium">Available Credits</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {profile?.balance.toFixed(2)} JC
-                  </p>
-                </div>
-                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                  <p className="text-sm text-blue-700 mb-1 font-medium flex items-center">
-                    <Wallet className="w-4 h-4 mr-1" /> Total Portfolio Score
-                  </p>
-                  {loadingWealth ? (
-                    <div className="h-8 w-24 bg-blue-200 rounded animate-pulse"></div>
-                  ) : (
-                    <p className="text-2xl font-bold text-blue-700">
-                      {totalWealth.toFixed(2)} JC
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* User ID */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  System User ID
-                </label>
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                  <p className="text-gray-600 font-mono text-sm break-all">
-                    {user?.id}
-                  </p>
-                </div>
-              </div>
-
-              {/* Logout Button */}
-              <button
-                onClick={() => signOut()}
-                className="w-full flex items-center justify-center space-x-2 py-3 px-4 bg-white border-2 border-red-100 text-red-600 rounded-xl hover:bg-red-50 hover:border-red-200 transition-all font-bold mt-4"
-              >
-                <LogOut className="w-5 h-5" />
-                <span>Log Out securely</span>
-              </button>
-            </div>
           </div>
+          
         </div>
 
-        {/* Right Column: Referral Program (Glassmorphism UI) */}
-        <div className="flex flex-col h-full">
-          <div className="bg-gradient-to-br from-blue-600 to-indigo-800 rounded-2xl shadow-lg p-8 text-white flex-1 relative overflow-hidden">
-            {/* Background Decoration */}
-            <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
+        {/* Right Column: Generic Share Tool (Takes up 1/3 space) */}
+        <div className="lg:col-span-1">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl shadow-xl p-8 text-white relative overflow-hidden border border-slate-700 h-full">
+            
+            {/* Glowing Background Effect */}
+            <div className="absolute -top-10 -right-10 w-48 h-48 bg-indigo-500/30 rounded-full blur-3xl pointer-events-none"></div>
             
             <div className="relative z-10">
-              <div className="flex items-center space-x-3 mb-8">
-                <Share2 className="w-8 h-8 text-blue-200" />
-                <h2 className="text-2xl font-bold">Invite Fellow Analysts</h2>
+              <div className="bg-white/10 w-12 h-12 rounded-2xl flex items-center justify-center mb-6 border border-white/5 backdrop-blur-md">
+                <Share2 className="w-6 h-6 text-indigo-300" />
               </div>
+              
+              <h2 className="text-2xl font-bold tracking-tight mb-3">Learning is better together.</h2>
+              <p className="text-slate-300 text-sm leading-relaxed mb-8">
+                Share JobPulse with your batchmates. Track market demand, build your skill portfolio, and prepare for placements as a team.
+              </p>
 
-              {/* Code Copier & WhatsApp Share */}
-              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-5 mb-6">
-                <p className="text-blue-100 text-sm font-medium mb-3 uppercase tracking-wider">Your Unique Invite Code</p>
-                
-                <div className="flex items-center justify-between bg-black/20 rounded-lg p-2 pl-4 mb-4">
-                  <span className="text-3xl font-bold tracking-widest font-mono text-white">
-                    {profile?.referral_code}
-                  </span>
-                  <button
-                    onClick={copyReferralCode}
-                    className="bg-blue-500 hover:bg-blue-400 text-white rounded-lg p-3 transition-colors shadow-sm"
-                    title="Copy code"
-                  >
-                    {copied ? (
-                      <Check className="w-5 h-5" />
-                    ) : (
-                      <Copy className="w-5 h-5" />
-                    )}
-                  </button>
-                </div>
+              <div className="space-y-4">
+                {/* Copy Link Button */}
+                <button
+                  onClick={copyPlatformLink}
+                  className="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center space-x-2 transition-all backdrop-blur-md"
+                >
+                  {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <LinkIcon className="w-5 h-5 text-slate-300" />}
+                  <span>{copied ? 'Link Copied!' : 'Copy Platform Link'}</span>
+                </button>
 
                 {/* WhatsApp Share Button */}
                 <button
                   onClick={handleWhatsAppShare}
-                  className="w-full bg-[#25D366] hover:bg-[#1ebd5b] text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors shadow-sm"
+                  className="w-full bg-[#25D366] hover:bg-[#1ebd5b] text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center space-x-2 transition-all shadow-lg hover:-translate-y-0.5"
                 >
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    width="24" 
-                    height="24" 
-                    viewBox="0 0 24 24" 
-                    fill="white"
-                    className="w-6 h-6"
-                  >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white" className="w-6 h-6">
                     <path d="M12.031 0C5.385 0 0 5.385 0 12.031c0 2.12.553 4.188 1.603 6.012L.15 24l6.103-1.6c1.782.96 3.79 1.464 5.778 1.464h.005C18.681 23.864 24 18.479 24 11.833 24 5.187 18.615 0 12.031 0zm0 21.864h-.003c-1.8 0-3.565-.483-5.111-1.396l-.367-.217-3.799.996 1.015-3.705-.238-.378c-.999-1.591-1.528-3.432-1.528-5.333 0-5.507 4.484-9.99 9.993-9.99 2.666 0 5.174 1.04 7.06 2.927 1.884 1.885 2.921 4.394 2.921 7.061-.002 5.51-4.488 9.995-9.995 9.995zm5.474-7.48c-.3-.15-1.774-.875-2.048-.975-.274-.1-.474-.15-.674.15-.2.3-.774.975-.949 1.175-.175.2-.35.225-.65.075-.3-.15-1.265-.466-2.408-1.488-.888-.795-1.488-1.776-1.663-2.076-.175-.3-.019-.462.131-.612.135-.135.3-.35.45-.525.15-.175.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.674-1.625-.924-2.225-.243-.585-.49-.505-.674-.515-.175-.008-.375-.008-.575-.008-.2 0-.525.075-.8.375-.275.3-1.049 1.025-1.049 2.5 0 1.475 1.074 2.9 1.224 3.1.15.2 2.115 3.226 5.124 4.526.716.31 1.274.495 1.709.633.718.228 1.37.195 1.886.118.58-.086 1.774-.725 2.024-1.425.25-.7.25-1.3.175-1.425-.075-.125-.275-.2-.575-.35z"/>
                   </svg>
                   <span>Share via WhatsApp</span>
                 </button>
               </div>
 
-              {/* How it works & Rewards */}
-              <div className="space-y-4">
-                <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-5">
-                  <h3 className="font-bold text-lg mb-3 flex items-center">
-                    <span className="bg-blue-500 rounded-full w-6 h-6 flex items-center justify-center text-sm mr-2">?</span>
-                    How it works
-                  </h3>
-                  <ul className="space-y-3 text-blue-50 text-sm">
-                    <li className="flex items-start space-x-3">
-                      <span className="font-bold text-blue-300 mt-0.5">1.</span>
-                      <span>Share your code with peers to join JobPulse.</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="font-bold text-blue-300 mt-0.5">2.</span>
-                      <span>They sign up using your invite code.</span>
-                    </li>
-                    <li className="flex items-start space-x-3">
-                      <span className="font-bold text-blue-300 mt-0.5">3.</span>
-                      <span>After their first simulation, you both receive bonus JC!</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-5">
-                  <h3 className="font-bold mb-4 text-center text-blue-100 uppercase tracking-widest text-sm">Instant Rewards</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center bg-black/20 rounded-lg p-3">
-                      <p className="text-2xl font-bold text-green-400">1000 JC</p>
-                      <p className="text-xs text-blue-200 mt-1 uppercase font-medium">For You</p>
-                    </div>
-                    <div className="text-center bg-black/20 rounded-lg p-3">
-                      <p className="text-2xl font-bold text-blue-300">500 JC</p>
-                      <p className="text-xs text-blue-200 mt-1 uppercase font-medium">For Peer</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Referred By Status */}
-              {profile?.referred_by && (
-                <div className="mt-6 bg-white/5 border border-white/10 backdrop-blur-sm rounded-xl p-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-blue-200 uppercase tracking-wider mb-1">Invited By</p>
-                    <p className="font-bold text-white font-mono">{profile.referred_by}</p>
-                  </div>
-                  {profile.referral_rewarded && (
-                    <span className="flex items-center space-x-1 text-xs font-bold text-green-400 bg-green-400/10 px-3 py-1.5 rounded-full">
-                      <Check className="w-3 h-3" />
-                      <span>Bonus Claimed</span>
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Footer Note */}
-      <div className="mt-8 bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-start space-x-3">
-        <div className="text-amber-500 font-bold text-xl mt-0.5">!</div>
-        <div>
-          <h3 className="font-bold text-amber-900 mb-1">Important Note</h3>
-          <p className="text-sm text-amber-800 leading-relaxed">
-            Invite rewards are automatically credited to your portfolio immediately after the referred user successfully completes their first simulation on the platform. Both you and your peer will receive the bonus JC instantly!
-          </p>
-        </div>
       </div>
     </div>
   );

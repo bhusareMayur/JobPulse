@@ -65,4 +65,39 @@ router.post('/', authenticateUser, async (req, res) => {
   }
 });
 
+
+
+router.get('/next-step', authenticateUser, async (req, res) => {
+  try {
+    // 1. Get all skills ordered by real-world demand
+    const { data: allSkills, error: skillsErr } = await supabase
+      .from('skills')
+      .select('id, name, demand_score, current_job_listings')
+      .order('demand_score', { ascending: false });
+
+    if (skillsErr) throw skillsErr;
+
+    // 2. Get the user's currently tracked skills
+    const { data: trackedSkills, error: trackErr } = await supabase
+      .from('tracked_skills')
+      .select('skill_id')
+      .eq('user_id', req.user.id);
+
+    if (trackErr) throw trackErr;
+
+    const trackedIds = new Set(trackedSkills.map(t => t.skill_id));
+
+    // 3. Find the highest demand skill they ARE NOT tracking
+    const recommendedSkill = allSkills.find(skill => !trackedIds.has(skill.id));
+
+    if (!recommendedSkill) {
+      return res.json({ message: "You are tracking all available top skills!" });
+    }
+
+    res.json({ recommendedSkill });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
