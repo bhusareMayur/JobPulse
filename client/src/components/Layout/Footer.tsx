@@ -1,10 +1,11 @@
 // client/src/components/Layout/Footer.tsx
-import { Activity, Code } from 'lucide-react';
+import { Activity, Code, Shield } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export const Footer = () => {
   return (
-    <footer className="bg-white border-t border-gray-200 py-8 mt-auto">
-      <div className="max-w-7xl mx-auto px-4 flex flex-col items-center justify-center space-y-3">
+    <footer className="bg-white border-t border-gray-200 py-8 mt-auto print:hidden">
+      <div className="max-w-7xl mx-auto px-4 flex flex-col items-center justify-center space-y-4">
         
         {/* Project Purpose Message */}
         <div className="flex items-center space-x-2 text-gray-600 text-sm sm:text-base text-center bg-blue-50 px-4 py-2 rounded-full border border-blue-100">
@@ -14,8 +15,8 @@ export const Footer = () => {
           </span>
         </div>
         
-        {/* Developer Credit */}
-        <div className="flex items-center justify-center pt-2">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+          {/* Developer Credit */}
           <div className="group flex items-center space-x-2 bg-slate-50 border border-slate-200 px-4 py-1.5 rounded-full text-sm text-slate-600 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-300">
             <Code className="w-4 h-4 text-blue-500 group-hover:rotate-6 transition-transform duration-300" />
             <span>Designed & developed by</span>
@@ -28,6 +29,15 @@ export const Footer = () => {
               Mayur Bhusare
             </a>
           </div>
+
+          {/* Admin Portal Access */}
+          <Link 
+            to="/admin"
+            className="group flex items-center space-x-2 bg-slate-800 border border-slate-700 px-4 py-1.5 rounded-full text-sm text-slate-300 shadow-sm hover:shadow-md hover:bg-slate-900 hover:text-white transition-all duration-300"
+          >
+            <Shield className="w-4 h-4 text-indigo-400 group-hover:text-indigo-300 transition-colors duration-200" />
+            <span className="font-bold tracking-wide">Admin Portal</span>
+          </Link>
         </div>
 
       </div>

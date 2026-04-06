@@ -55,7 +55,7 @@ function AppRoutes() {
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login onToggle={() => navigate('/signup')} />} />
             <Route path="/signup" element={<Signup onToggle={() => navigate('/login')} />} />
-            <Route path="/admin/hod" element={<HodDashboard />} />
+            <Route path="/admin" element={<HodDashboard />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
@@ -74,7 +74,7 @@ function AppRoutes() {
           <Route path="/roadmap" element={<RoadmapGenerator />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/skill/:skillId" element={<SkillDetailRoute />} />
-          <Route path="/admin/hod" element={<HodDashboard />} />
+          <Route path="/admin" element={<HodDashboard />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

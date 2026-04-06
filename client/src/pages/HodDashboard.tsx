@@ -1,44 +1,92 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, 
-  BarChart, Bar, XAxis, YAxis, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend
+  BarChart, Bar, XAxis, YAxis, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, CartesianGrid
 } from 'recharts';
-import { Lock, TrendingUp, Users, Activity, Download, Lightbulb, CheckCircle, Info, X, Trophy, Mail } from 'lucide-react';
+import { Lock, TrendingUp, Users, Activity, Download, Lightbulb, CheckCircle, Info, X, Trophy, Mail, BarChart3, LogOut } from 'lucide-react';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316'];
 
 export const HodDashboard = () => {
+  const [role, setRole] = useState<'hod' | 'tpo'>('hod');
+  const [department, setDepartment] = useState('CS');
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true); // Prevents login screen flash on refresh
   const [error, setError] = useState('');
   const [showReadinessModal, setShowReadinessModal] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // 1. Check for existing session on page load (Refresh Fix)
+  useEffect(() => {
+    const savedSession = sessionStorage.getItem('admin_session');
+    if (savedSession) {
+      const { savedRole, savedDept, savedPass } = JSON.parse(savedSession);
+      setRole(savedRole);
+      setDepartment(savedDept);
+      setPassword(savedPass);
+      fetchDashboardData(savedRole, savedDept, savedPass);
+    } else {
+      setInitialLoad(false);
+    }
+  }, []);
+
+  // 2. Centralized fetch function for both login and auto-refresh
+  const fetchDashboardData = async (currentRole: string, currentDept: string, currentPass: string) => {
     setLoading(true);
     setError('');
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/analytics/hod?pass=${password}`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/analytics/hod?role=${currentRole}&department=${currentDept}&pass=${currentPass}`);
       if (!res.ok) {
+        sessionStorage.removeItem('admin_session'); // Clear bad credentials
         if (res.status === 401) throw new Error('Incorrect Admin Password');
         throw new Error('Server Error');
       }
+      
       const json = await res.json();
       setData(json);
       setIsAuthenticated(true);
+      
+      // Save valid session to survive refreshes
+      sessionStorage.setItem('admin_session', JSON.stringify({ 
+        savedRole: currentRole, 
+        savedDept: currentDept, 
+        savedPass: currentPass 
+      }));
     } catch (err: any) {
       setError(err.message);
+      setIsAuthenticated(false);
     } finally {
       setLoading(false);
+      setInitialLoad(false);
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    fetchDashboardData(role, department, password);
   };
+
+  // 3. Secure Logout Handler
+  const handleLogout = () => {
+    sessionStorage.removeItem('admin_session');
+    setIsAuthenticated(false);
+    setData(null);
+    setPassword('');
+  };
+
+  const handlePrint = () => window.print();
+
+  // Show a blank loading screen briefly if we are checking session storage
+  if (initialLoad) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -47,15 +95,46 @@ export const HodDashboard = () => {
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
             <Lock className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">HOD Analytics Portal</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Analytics Portal</h1>
           <p className="text-slate-500 mb-8 text-sm">Secure access for Department Heads and Placement Cells.</p>
+          
           <form onSubmit={handleLogin} className="space-y-4">
+            <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
+              <button
+                type="button"
+                onClick={() => setRole('hod')}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${role === 'hod' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                HOD Login
+              </button>
+              <button
+                type="button"
+                onClick={() => setRole('tpo')}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${role === 'tpo' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                TPO Master
+              </button>
+            </div>
+
+            {role === 'hod' && (
+              <select 
+                value={department} 
+                onChange={(e) => setDepartment(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-800 focus:bg-white outline-none transition-all font-medium text-slate-700"
+              >
+                <option value="CS">Computer Science (CS)</option>
+                <option value="IT">Information Technology (IT)</option>
+                <option value="CSBS">CS & Business Systems (CSBS)</option>
+                <option value="ENTC">Electronics (ENTC)</option>
+              </select>
+            )}
+
             <input
               type="password"
-              placeholder="Enter Administrative Password"
+              placeholder={`${role === 'tpo' ? 'TPO' : department + ' HOD'} Password`}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-800 focus:bg-white outline-none transition-all text-center tracking-widest"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-800 focus:bg-white outline-none transition-all text-center tracking-widest font-medium"
               required
             />
             {error && <p className="text-red-500 text-sm font-medium bg-red-50 py-2 rounded-lg">{error}</p>}
@@ -68,90 +147,69 @@ export const HodDashboard = () => {
     );
   }
 
+  const activeStudentChartData = data?.chartData?.filter((item: any) => item.value > 0).slice(0, 6) || [];
+
   return (
     <div className="min-h-screen bg-slate-50 py-12 print:bg-white print:py-0">
       
-      {/* THE MODAL POPUP */}
+      {/* Readiness Information Modal */}
       {showReadinessModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 print:hidden">
           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 relative animate-in fade-in zoom-in duration-200">
-            <button 
-              onClick={() => setShowReadinessModal(false)} 
-              className="absolute top-6 right-6 text-slate-400 hover:text-slate-800 transition-colors"
-            >
+            <button onClick={() => setShowReadinessModal(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-800">
               <X className="w-6 h-6" />
             </button>
-            
             <h2 className="text-2xl font-extrabold text-slate-900 mb-6 flex items-center">
               <Activity className="w-6 h-6 mr-3 text-blue-600" />
               Placement Readiness
             </h2>
-            
             <div className="space-y-6 text-slate-600">
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wider mb-2">What is this score?</h3>
-                <p className="text-sm leading-relaxed">
-                  This score (out of 100) measures how accurately our students' technical skills align with live, real-world industry demand. It is calculated by measuring the variance between the percentage of students holding a specific technology and the percentage of active job listings asking for that technology on the JSearch API.
-                </p>
-              </div>
-              
+              <p className="text-sm leading-relaxed">
+                This score measures how accurately your students' technical skills align with live, real-world industry demand via the JSearch API.
+              </p>
               <div className="bg-indigo-50 p-5 rounded-2xl border border-indigo-100">
-                <h3 className="font-bold text-indigo-900 text-sm uppercase tracking-wider mb-2">Why is our score {data?.readinessScore}?</h3>
-                <p className="text-sm font-medium text-indigo-800 leading-relaxed">{data?.insight}</p>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wider mb-3">Score Rubric</h3>
-                <ul className="text-sm space-y-3">
-                  <li className="flex items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                    <span className="w-3 h-3 rounded-full bg-emerald-500 mr-3 shadow-sm"></span> 
-                    <span><strong>70 - 100:</strong> Excellent Alignment. Curriculum is highly effective.</span>
-                  </li>
-                  <li className="flex items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                    <span className="w-3 h-3 rounded-full bg-amber-500 mr-3 shadow-sm"></span> 
-                    <span><strong>50 - 69:</strong> Moderate Alignment. Monitor student focus trends.</span>
-                  </li>
-                  <li className="flex items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                    <span className="w-3 h-3 rounded-full bg-red-500 mr-3 shadow-sm"></span> 
-                    <span><strong>0 - 49:</strong> Critical Mismatch. Immediate workshops required.</span>
-                  </li>
-                </ul>
+                <h3 className="font-bold text-indigo-900 text-sm uppercase mb-2">Why is our score {data?.readinessScore}?</h3>
+                <p className="text-sm font-medium text-indigo-800">{data?.insight}</p>
               </div>
             </div>
-
-            <div className="mt-8 pt-6 border-t border-slate-100">
-              <button 
-                onClick={() => setShowReadinessModal(false)} 
-                className="w-full bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200"
-              >
-                Understood
-              </button>
-            </div>
+            <button onClick={() => setShowReadinessModal(false)} className="w-full mt-6 bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-800">
+              Understood
+            </button>
           </div>
         </div>
       )}
 
       <div className="max-w-7xl mx-auto px-4">
         
-        {/* Header */}
+        {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 print:hidden">
           <div>
-            <span className="bg-slate-800 text-white px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase mb-3 inline-block">Directorate View</span>
-            <h1 className="text-3xl font-extrabold text-slate-900 mt-1">Department Skill Intelligence</h1>
+            <span className="bg-slate-800 text-white px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase mb-3 inline-block">
+              {role === 'tpo' ? 'Master TPO View' : `${department} Directorate View`}
+            </span>
+            <h1 className="text-3xl font-extrabold text-slate-900 mt-1">
+              {role === 'tpo' ? 'Global Placement Intelligence' : `${department} Skill Intelligence`}
+            </h1>
             <p className="text-slate-600 mt-1">Live simulation data mapping student interests against global hiring trends.</p>
           </div>
-          <button 
-            onClick={handlePrint}
-            className="mt-4 md:mt-0 flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-sm"
-          >
-            <Download className="w-5 h-5" />
-            <span>Export PDF Report</span>
-          </button>
+          
+          <div className="flex items-center space-x-3 mt-4 md:mt-0">
+            <button onClick={handlePrint} className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium shadow-sm transition-colors">
+              <Download className="w-5 h-5" />
+              <span>Export PDF</span>
+            </button>
+            <button onClick={handleLogout} className="flex items-center space-x-2 bg-white border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-700 px-5 py-2.5 rounded-xl font-medium shadow-sm transition-colors">
+              <LogOut className="w-5 h-5" />
+              <span>Logout</span>
+            </button>
+          </div>
         </div>
 
         {/* Print Only Header */}
         <div className="hidden print:block mb-8 border-b-2 border-slate-900 pb-4">
-          <h1 className="text-4xl font-bold text-slate-900">JobPulse Placement Intelligence Report</h1>
+          <h1 className="text-4xl font-bold text-slate-900">
+            {role === 'tpo' ? 'Global Placement Intelligence Report' : `${department} Placement Intelligence Report`}
+          </h1>
           <p className="text-slate-600 mt-2">Generated on: {new Date().toLocaleDateString()}</p>
         </div>
 
@@ -166,18 +224,13 @@ export const HodDashboard = () => {
           </div>
         </div>
 
-        {/* Top Stats & Readiness Score Grid */}
+        {/* Top Stats Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          
-          <div 
-            onClick={() => setShowReadinessModal(true)}
-            className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center relative overflow-hidden lg:col-span-1 cursor-pointer hover:border-blue-300 hover:shadow-md transition-all group"
-          >
+          <div onClick={() => setShowReadinessModal(true)} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center relative overflow-hidden lg:col-span-1 cursor-pointer hover:border-blue-300 transition-all group">
             <div className="flex items-center justify-center space-x-2 mb-2 z-10 bg-white/80 px-4 py-1 rounded-full">
-              <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider group-hover:text-blue-600 transition-colors">Placement Readiness</h2>
-              <Info className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+              <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider group-hover:text-blue-600">Placement Readiness</h2>
+              <Info className="w-4 h-4 text-slate-400 group-hover:text-blue-500" />
             </div>
-            
             <div className="w-full h-[180px] -mb-10 relative">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -186,20 +239,13 @@ export const HodDashboard = () => {
                       { value: data?.readinessScore || 0, fill: (data?.readinessScore || 0) >= 70 ? '#10b981' : (data?.readinessScore || 0) >= 50 ? '#f59e0b' : '#ef4444' },
                       { value: 100 - (data?.readinessScore || 0), fill: '#f1f5f9' }
                     ]}
-                    cx="50%" cy="100%"
-                    startAngle={180} endAngle={0}
-                    innerRadius={80} outerRadius={110}
-                    dataKey="value"
-                    stroke="none"
-                    isAnimationActive={true}
+                    cx="50%" cy="100%" startAngle={180} endAngle={0} innerRadius={80} outerRadius={110} dataKey="value" stroke="none"
                   />
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute bottom-0 left-0 right-0 text-center pb-4">
-                <span className={`text-5xl font-extrabold transition-transform group-hover:scale-105 inline-block ${
-                  (data?.readinessScore || 0) >= 70 ? 'text-emerald-500' 
-                  : (data?.readinessScore || 0) >= 50 ? 'text-amber-500' 
-                  : 'text-red-500'
+                <span className={`text-5xl font-extrabold ${
+                  (data?.readinessScore || 0) >= 70 ? 'text-emerald-500' : (data?.readinessScore || 0) >= 50 ? 'text-amber-500' : 'text-red-500'
                 }`}>
                   {data?.readinessScore || 0}
                 </span>
@@ -222,7 +268,7 @@ export const HodDashboard = () => {
                 <div className="bg-emerald-50 p-2.5 rounded-lg"><Activity className="w-5 h-5 text-emerald-600"/></div>
                 <p className="text-sm text-slate-500 font-bold uppercase tracking-wider">Total Engagements</p>
               </div>
-              <p className="text-4xl font-extrabold text-slate-900">{data?.totalTrades}</p>
+              <p className="text-4xl font-extrabold text-slate-900">{data?.totalEngagements}</p>
             </div>
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -230,7 +276,7 @@ export const HodDashboard = () => {
                 <div className="bg-amber-50 p-2.5 rounded-lg"><CheckCircle className="w-5 h-5 text-amber-600"/></div>
                 <p className="text-sm text-slate-500 font-bold uppercase tracking-wider">Top Student Pick</p>
               </div>
-              <p className="text-xl font-bold text-slate-900 truncate" title={data?.chartData[0]?.name}>{data?.chartData[0]?.name || 'N/A'}</p>
+              <p className="text-xl font-bold text-slate-900 truncate">{data?.chartData[0]?.name || 'N/A'}</p>
             </div>
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -238,12 +284,35 @@ export const HodDashboard = () => {
                 <div className="bg-purple-50 p-2.5 rounded-lg"><TrendingUp className="w-5 h-5 text-purple-600"/></div>
                 <p className="text-sm text-slate-500 font-bold uppercase tracking-wider">Top Industry Need</p>
               </div>
-              <p className="text-xl font-bold text-slate-900 truncate" title={data?.topMarketSkill}>{data?.topMarketSkill || 'N/A'}</p>
+              <p className="text-xl font-bold text-slate-900 truncate">{data?.topMarketSkill || 'N/A'}</p>
             </div>
           </div>
         </div>
 
-        {/* --- NEW: TOP TALENT WATCHLIST --- */}
+        {/* Cross-Department Engagement Comparison */}
+        {data?.departmentComparison && data.departmentComparison.length > 0 && (
+          <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 mb-8">
+            <h2 className="text-xl font-bold text-slate-900 mb-2">Cross-Department Engagement</h2>
+            <p className="text-sm text-slate-500 mb-6">Total number of skills actively tracked by students across the entire institution.</p>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data.departmentComparison} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" tick={{ fill: '#475569', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: '#475569' }} axisLine={false} tickLine={false} />
+                  <RechartsTooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                  <Bar dataKey="engagements" name="Tracked Skills" fill="#6366f1" radius={[8, 8, 0, 0]} barSize={50}>
+                    {data.departmentComparison.map((_entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {/* Top Talent Watchlist */}
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 mb-8">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
             <div className="flex items-center">
@@ -251,8 +320,8 @@ export const HodDashboard = () => {
                 <Trophy className="w-6 h-6 text-amber-600" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Top Market Analysts (Placement Watchlist)</h2>
-                <p className="text-sm text-slate-500">Highest performing students based on simulated portfolio growth and market accuracy.</p>
+                <h2 className="text-xl font-bold text-slate-900">Top Talent Watchlist</h2>
+                <p className="text-sm text-slate-500">Highest performing students based on active tracked progress.</p>
               </div>
             </div>
           </div>
@@ -265,7 +334,7 @@ export const HodDashboard = () => {
                   <th className="p-4 font-bold border-b border-slate-100">Student Name</th>
                   <th className="p-4 font-bold border-b border-slate-100">Contact Email</th>
                   <th className="p-4 font-bold border-b border-slate-100">Top Asset Focus</th>
-                  <th className="p-4 font-bold border-b border-slate-100 text-right">Portfolio Value</th>
+                  <th className="p-4 font-bold border-b border-slate-100 text-right">Skill Points</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -294,16 +363,15 @@ export const HodDashboard = () => {
                       </span>
                     </td>
                     <td className="p-4 text-right font-bold text-emerald-600 whitespace-nowrap">
-                      {analyst.wealth.toLocaleString()} JC
+                      {analyst.wealth?.toLocaleString()} Pts
                     </td>
                   </tr>
                 ))}
                 
-                {/* Fallback if no trades have happened yet */}
                 {(!data?.topAnalysts || data.topAnalysts.length === 0) && (
                   <tr>
                     <td colSpan={5} className="p-8 text-center text-slate-500 font-medium italic">
-                      Market hasn't opened yet. Student data will populate here once trades begin.
+                      Waiting for student engagement. Profiles will populate here soon.
                     </td>
                   </tr>
                 )}
@@ -311,13 +379,12 @@ export const HodDashboard = () => {
             </table>
           </div>
         </div>
-        {/* --- END TOP TALENT WATCHLIST --- */}
 
         {/* Charts Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-900 mb-2">Student Focus vs. Market Reality</h2>
-            <p className="text-sm text-slate-500 mb-6">Compares what students are learning against what companies are currently hiring for.</p>
+            <p className="text-sm text-slate-500 mb-6">Compares what students are learning against current company hiring trends.</p>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data?.chartData?.slice(0, 6)}>
@@ -333,28 +400,34 @@ export const HodDashboard = () => {
             </div>
           </div>
 
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-            <h2 className="text-lg font-bold text-slate-900 mb-6">Top Student Investments (Volume)</h2>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data?.chartData?.slice(0, 6)} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fill: '#475569', fontWeight: 600}} width={120} />
-                  <RechartsTooltip 
-                    cursor={{fill: '#f8fafc'}} 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Bar dataKey="value" name="Total Units Held" fill="#3b82f6" radius={[0, 6, 6, 0]} barSize={24}>
-                    {data?.chartData?.slice(0, 6).map((_entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+            <h2 className="text-lg font-bold text-slate-900 mb-2">Top Student Investments (Volume)</h2>
+            <p className="text-sm text-slate-500 mb-6">Technologies with the highest number of active student trackers.</p>
+            
+            {activeStudentChartData.length > 0 ? (
+              <div className="h-[300px] flex-grow">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={activeStudentChartData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fill: '#475569', fontWeight: 600}} width={120} />
+                    <RechartsTooltip cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                    <Bar dataKey="value" name="Total Trackers" fill="#3b82f6" radius={[0, 6, 6, 0]} barSize={24}>
+                      {activeStudentChartData.map((_entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[300px] flex-grow flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <BarChart3 className="w-10 h-10 text-slate-300 mb-3" />
+                <p className="text-slate-500 font-medium text-center px-4">Waiting for student data.<br/>No skills have been tracked in this department yet.</p>
+              </div>
+            )}
           </div>
-
         </div>
+
       </div>
     </div>
   );
