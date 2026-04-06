@@ -238,7 +238,7 @@ export const HodDashboard = () => {
               className="flex items-center space-x-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-5 py-2.5 rounded-xl font-medium shadow-sm transition-colors"
             >
               <RefreshCw className={`w-5 h-5 ${loading || syncing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{(loading || syncing) ? 'Syncing...' : 'Force Sync'}</span>
+              <span className="hidden sm:inline">{(loading || syncing) ? 'Syncing...' : 'Sync Data'}</span>
             </button>
 
             <button onClick={handlePrint} className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium shadow-sm transition-colors">

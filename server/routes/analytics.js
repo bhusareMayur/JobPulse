@@ -25,8 +25,8 @@ router.get('/hod', async (req, res) => {
   }
 
   try {
-    // 2. Fetch ALL Profiles globally (Needed for cross-department comparison)
-    const { data: allProfiles, error: profileErr } = await supabase.from('profiles').select('id, full_name, department');
+    // 2. Fetch ALL Profiles globally (NOW INCLUDES EMAIL)
+    const { data: allProfiles, error: profileErr } = await supabase.from('profiles').select('id, full_name, department, email');
     if (profileErr) throw profileErr;
 
     // 3. Fetch ALL Tracked Skills globally
@@ -41,10 +41,14 @@ router.get('/hod', async (req, res) => {
     const skillMap = {};
     skills.forEach(s => skillMap[s.id] = s);
 
-    // Map users to their respective departments
+    // Map users to their respective departments AND emails
     const userMap = {};
     allProfiles.forEach(p => {
-      userMap[p.id] = { dept: p.department || 'Unassigned', name: p.full_name || 'Anonymous Student' };
+      userMap[p.id] = { 
+        dept: p.department || 'Unassigned', 
+        name: p.full_name || 'Anonymous Student',
+        email: p.email || 'No Email Provided' // <--- Maps the real email
+      };
     });
 
     // 5. Cross-Department Comparison (Available to EVERYONE)
@@ -147,7 +151,7 @@ router.get('/hod', async (req, res) => {
       .map(userId => ({
         id: userId,
         name: userMap[userId]?.name || 'Active Student',
-        email: 'student@institute.edu', 
+        email: userMap[userId]?.email, // <--- REPLACED HARDCODED EMAIL WITH REAL DATA
         topSkill: userStats[userId].topSkillName,
         wealth: Math.round(userStats[userId].totalScore * 10), 
       }))

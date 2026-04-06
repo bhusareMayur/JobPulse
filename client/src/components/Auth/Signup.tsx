@@ -53,7 +53,7 @@ export const Signup = ({ onToggle }: SignupProps) => {
         options: {
           data: {
             full_name: name.trim(),
-            department: department, // Now passes 'CS' instead of 'Computer Science'
+            department: department, 
             graduation_year: parseInt(graduationYear),
           }
         }
@@ -61,13 +61,14 @@ export const Signup = ({ onToggle }: SignupProps) => {
 
       if (signUpError) throw signUpError;
 
-      // 2. Ensure the Profile is populated with the educational data
+      // 2. Ensure the Profile is populated with the educational data AND email
       if (data?.user) {
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
             id: data.user.id,
             full_name: name.trim(),
+            email: email.trim(),       // <--- NOW SAVING EMAIL TO PROFILES TABLE
             department: department,
             graduation_year: parseInt(graduationYear),
           }, { onConflict: 'id' });
