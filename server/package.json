@@ -1,9 +1,11 @@
 {
   "name": "jobpulse-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "JobPulse Backend Server",
+  "main": "server.js",
   "scripts": {
+    "start": "concurrently \"node server.js\" \"node workers/demandScraper.js\"",
+    "dev": "nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -14,10 +16,11 @@
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.101.1",
     "axios": "^1.14.0",
+    "concurrently": "^8.2.2",
     "cors": "^2.8.6",
     "dotenv": "^17.4.0",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.3.2",
+    "express-rate-limit": "^7.1.5",
     "node-cache": "^5.1.2",
     "node-cron": "^4.2.1",
     "zod": "^4.3.6"
