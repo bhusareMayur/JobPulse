@@ -3,13 +3,14 @@ import express from 'express';
 import { z } from 'zod';
 import { supabase } from '../config/supabase.js';
 import { authenticateUser } from '../middleware/auth.js';
+import NodeCache from 'node-cache';
 
 const router = express.Router();
+const cache = new NodeCache({ stdTTL: 30 }); // Default 30s cache
 
 // Define the exact shape and rules for creating a new skill
 const skillSchema = z.object({
   name: z.string().trim().min(1, { message: "Skill name is required and cannot be empty." }),
-  // Using coerce allows us to accept "1.5" (string from form) and safely convert it to a number 1.5
   initialPrice: z.coerce.number().min(1.0, { message: "Initial price must be at least 1.0 JC." })
 });
 
@@ -24,7 +25,6 @@ router.post('/', authenticateUser, async (req, res) => {
       });
     }
 
-    // 2. Extract the safely validated and formatted data
     const { name: cleanName, initialPrice: price } = validationResult.data;
 
     // 3. Check for Duplicates (Case-Insensitive)
@@ -65,10 +65,13 @@ router.post('/', authenticateUser, async (req, res) => {
   }
 });
 
-
-
 router.get('/next-step', authenticateUser, async (req, res) => {
   try {
+    // Check Cache first (Unique per user because recommendations are personalized)
+    const cacheKey = `next_step_${req.user.id}`;
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) return res.json(cachedData);
+
     // 1. Get all skills ordered by real-world demand
     const { data: allSkills, error: skillsErr } = await supabase
       .from('skills')
@@ -90,23 +93,29 @@ router.get('/next-step', authenticateUser, async (req, res) => {
     // 3. Find the highest demand skill they ARE NOT tracking
     const recommendedSkill = allSkills.find(skill => !trackedIds.has(skill.id));
 
-    if (!recommendedSkill) {
-      return res.json({ message: "You are tracking all available top skills!" });
-    }
+    const responsePayload = recommendedSkill 
+      ? { recommendedSkill } 
+      : { message: "You are tracking all available top skills!" };
 
-    res.json({ recommendedSkill });
+    // Save to Cache
+    cache.set(cacheKey, responsePayload);
+
+    res.json(responsePayload);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-
-
 router.get('/:id/predict', authenticateUser, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 1. Fetch current skill data (Grab ALL columns to avoid missing column crashes)
+    // Check Cache first (Global per skill, cached for 60 seconds)
+    const cacheKey = `predict_${id}`;
+    const cachedPrediction = cache.get(cacheKey);
+    if (cachedPrediction) return res.json(cachedPrediction);
+
+    // 1. Fetch current skill data
     const { data: skill, error: skillError } = await supabase
       .from('skills')
       .select('*') 
@@ -115,11 +124,10 @@ router.get('/:id/predict', authenticateUser, async (req, res) => {
 
     if (skillError) throw skillError;
 
-    // Safely support both your old schema (current_price) and new schema (demand_score)
     const currentScore = skill.demand_score || skill.current_price || 0;
     const currentJobs = skill.current_job_listings || 0;
 
-    // 2. Fetch historical data (Safely check 'demand_history', fallback to 'price_history')
+    // 2. Fetch historical data
     let history = [];
     const { data: demandHistory, error: dhError } = await supabase
       .from('demand_history')
@@ -131,7 +139,6 @@ router.get('/:id/predict', authenticateUser, async (req, res) => {
     if (!dhError && demandHistory && demandHistory.length > 0) {
       history = demandHistory;
     } else {
-      // Fallback if demand_history doesn't exist yet
       const { data: priceHistory, error: phError } = await supabase
         .from('price_history')
         .select('*')
@@ -144,7 +151,7 @@ router.get('/:id/predict', authenticateUser, async (req, res) => {
       }
     }
 
-    // 3. Simple Linear Regression Algorithm to predict future scope
+    // 3. Linear Regression Algorithm
     let projectedPrice = currentScore;
     let trend = 'stable';
     let confidence = 'Low'; 
@@ -156,7 +163,6 @@ router.get('/:id/predict', authenticateUser, async (req, res) => {
       let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
 
       history.forEach((point, index) => {
-        // Safely extract the score regardless of the column name used in the DB
         const pointScore = point.score || point.price || point.demand_score || 0;
         sumX += index;
         sumY += Number(pointScore);
@@ -164,32 +170,24 @@ router.get('/:id/predict', authenticateUser, async (req, res) => {
         sumXX += index * index;
       });
 
-      // Calculate slope (m)
       const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-      
-      // Project 7 steps into the future
       const futureIndex = n + 7;
-      
-      // Calculate Y-intercept (b)
       const intercept = (sumY - slope * sumX) / n;
       
       projectedPrice = (slope * futureIndex) + intercept;
 
-      // Determine textual trend
       if (slope > 0.05) trend = 'surging';
       else if (slope < -0.05) trend = 'declining';
       else trend = 'stable';
     }
 
-    // 4. Incorporate today's job posting volume as a multiplier
+    // 4. Incorporate today's job posting volume
     const jobVolumeMultiplier = currentJobs > 10000 ? 1.05 : 1.0;
     projectedPrice = Math.max(1, projectedPrice * jobVolumeMultiplier); 
 
-    // Fail-safe: If math results in NaN (e.g. corrupted data), default to current score
     if (isNaN(projectedPrice)) projectedPrice = currentScore;
 
-    // Send successful payload to frontend
-    res.json({
+    const responsePayload = {
       success: true,
       prediction: {
         projectedScore: projectedPrice.toFixed(2),
@@ -197,11 +195,17 @@ router.get('/:id/predict', authenticateUser, async (req, res) => {
         confidence: confidence,
         currentJobs: currentJobs
       }
-    });
+    };
+
+    // Save to Cache for 60 seconds (Overrides default 30s)
+    cache.set(cacheKey, responsePayload, 60);
+
+    res.json(responsePayload);
 
   } catch (error) {
     console.error("Prediction API Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
+
 export default router;

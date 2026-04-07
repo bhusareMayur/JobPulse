@@ -21,15 +21,14 @@ export const Dashboard = ({ onNavigateToSkill }: DashboardProps) => {
     fetchSkills();
     fetchNextStep();
     
-    const channel = supabase
-      .channel('skills-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'skills' }, () => {
-        fetchSkills();
-      })
-      .subscribe();
+    // Launch Improvement: Replaced WebSockets with 30-second polling
+    // This prevents hitting the 200 concurrent connection limit on Supabase Free tier
+    const pollInterval = setInterval(() => {
+      fetchSkills();
+    }, 30000);
 
     return () => {
-      supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, []);
 

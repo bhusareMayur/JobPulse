@@ -4,13 +4,12 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import rateLimit from 'express-rate-limit'; 
 
 // Import Route Handlers
 import trackRoutes from './routes/track.js';
-import leaderboardRoutes from './routes/leaderboard.js';
 import skillsRoutes from './routes/skills.js';
 import roadmapRoutes from './routes/roadmap.js';
-import './workers/demandScraper.js';
 import analyticsRoutes from './routes/analytics.js';
 
 dotenv.config();
@@ -24,9 +23,19 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 app.use(cors());
 app.use(express.json());
 
-// Mount Routes
+// Launch Improvement: Rate Limiting
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 150, 
+  message: { error: "Too many requests, please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/', apiLimiter);
+
+// Mount Routes (Leaderboard Removed)
 app.use('/api/track', trackRoutes);
-app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/roadmap', roadmapRoutes);
 app.use('/api/analytics', analyticsRoutes);
