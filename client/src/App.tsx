@@ -47,6 +47,7 @@ function AppRoutes() {
     navigate(`/skill/${skillId}`);
   };
 
+  // Unauthenticated Layout (No bottom navbar here, so no padding needed)
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -64,8 +65,10 @@ function AppRoutes() {
     );
   }
 
+  // Authenticated Layout (Mobile bottom navbar is here!)
+  // FIX: Added `pb-24 md:pb-0` to the wrapper below
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex flex-col pb-24 md:pb-0">
       <Navbar />
       <main className="flex-grow">
         <Routes>
