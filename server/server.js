@@ -23,15 +23,21 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 app.use(cors());
 app.use(express.json());
 
+// CRITICAL for Render: Tells Express to look at the actual user's IP, 
+// not Render's Load Balancer IP. Required for the rate limiter to work accurately.
+app.set('trust proxy', 1); 
+
 // Launch Improvement: Rate Limiting
+// Increased to 5000 to account for 1000 students sharing the same Campus Wi-Fi IP
 const apiLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 150, 
+  windowMs: 1 * 60 * 1000, // 1 minute window
+  max: 5000, 
   message: { error: "Too many requests, please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
+// Apply rate limiter to all API routes
 app.use('/api/', apiLimiter);
 
 // Mount Routes (Leaderboard Removed)

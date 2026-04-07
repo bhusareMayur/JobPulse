@@ -1,0 +1,15 @@
+config:
+  target: "https://jobpulse-64hj.onrender.com"
+  phases:
+    - duration: 10
+      arrivalRate: 10
+      name: "Phase 1: Warm Up (10 users/sec)"
+    - duration: 20
+      arrivalRate: 100
+      name: "Phase 2: THE LAUNCH SPIKE (100 users/sec)"
+  
+scenarios:
+  - name: "Student opening the Dashboard"
+    flow:
+      - get:
+          url: "/api/analytics/batch-trends?year=2026"
