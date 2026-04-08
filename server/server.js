@@ -20,7 +20,14 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '.env') });
 
 // Global Middleware
-app.use(cors({ origin: 'https://job-pulse-pi.vercel.app/' }));
+// Updated CORS to allow both local development and Vercel production
+app.use(cors({
+  origin: [
+    'http://localhost:5173', 
+    'https://job-pulse-pi.vercel.app'
+  ],
+  credentials: true
+}));
 app.use(express.json());
 
 // CRITICAL for Render: Tells Express to look at the actual user's IP, 
